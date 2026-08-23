@@ -4,4 +4,5 @@ Imperative one-liners, each written because something actually went wrong. Loade
 
 ## Rules
 
-_None logged yet._
+- Mount the Postgres volume at `/var/lib/postgresql`, never `/var/lib/postgresql/data` — the `postgres:18+` images keep data in a major-version subdirectory and refuse to start on the old path.
+- Before pinning any dependency, check its own `go` directive against ours; a module requiring a newer Go than `go.mod` declares fails to resolve rather than degrading gracefully.

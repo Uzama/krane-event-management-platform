@@ -6,7 +6,7 @@ Event Management Platform — a Go REST/JSON API over Postgres 18, with a thin r
 
 Known repo mistakes and gotchas: @FAILURES.md — read it before starting any task.
 
-> **Repo is pre-code.** The tree below is the *target* layout, not what exists. There is no `go.mod`, `Makefile`, or `docker-compose.yml` yet, so `make up/seed/test` do not run — scaffolding is feature 1 in `FEATURES.md`. Delete this note once it lands.
+> **Partially scaffolded.** `go.mod`, `Makefile`, `docker-compose.yml`, `migrations/` and CI exist, and `make up/seed/test/lint` all run green. The `internal/` tree below is still the *target* layout — its packages arrive with feature 04 in `FEATURES.md`, and `make seed` is a stub until feature 14. Delete this note once 04 lands.
 
 ## What this repo is — clean architecture
 
@@ -156,15 +156,20 @@ Every feature runs through this loop. Do not skip or reorder steps. Do not bypas
 A task is not done until these are green.
 
 ```bash
-make up            # postgres 18 + mock OIDC + api, clean start
+make up            # postgres 18 + mock OIDC, migrated. IDEMPOTENT — safe to re-run
 make seed          # 50 events, 5k users, 50k invitations; prints demo tokens
 make test          # go test ./... against real Postgres in Docker (never mocks for repo/integration)
 make lint          # gofmt/vet/golangci-lint
+make down          # stop everything and DELETE all data — the ONLY destructive target
 ```
+
+- **`make up` must stay idempotent, and `make down` is the only thing that removes data.** `make test` depends on `up`, so an `up` that wiped volumes would destroy what `seed` just wrote before `test` ever saw it — at feature 14 that is 50k invitations vanishing silently mid-chain. Re-running `up` is always safe.
 
 - Run `make test` after every meaningful edit, not once at the end.
 - To iterate on one failing test, `make up` first (the suite needs Postgres), then run it directly: `go test ./internal/domain/session/ -run TestCreateSession -race -count=1`.
-- Tests run against real Postgres, not mocks. Repo and integration tests use a throwaway database.
+- Tests run against real Postgres, not mocks. Repo and integration tests use a throwaway database (`krane_test`), dropped and recreated by `make test`.
+- **No test may assume it is the only occupant of the database.** Create your own fixtures with unique ids; never `TRUNCATE` a shared table. Isolation today is one database for the whole run; at the first package that writes data it becomes `CREATE DATABASE <pkg> TEMPLATE krane_test` per package, and only tests that obey this rule survive that change unedited.
+- Isolation is **per-package, never per-test**. Feature 16's race test needs two goroutines contending on the same rows through the same constraint — isolating them from each other would destroy the thing it exists to prove. Concurrency tests share a database by design.
 - Do not start the server and leave it running to "verify" a change — it never exits. Use `make test`.
 - For concurrency, write the failing test first and confirm it actually races (goroutines released together on a barrier), not sequential calls that can't catch the bug. Always run these with `-race`.
 

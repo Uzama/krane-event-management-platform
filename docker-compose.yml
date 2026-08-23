@@ -1,0 +1,88 @@
+# Local stack for the Event Management Platform.
+#
+# Item 02's migration hard-codes `ALTER DEFAULT PRIVILEGES FOR ROLE krane_migrator`,
+# so POSTGRES_USER below MUST stay krane_migrator: run the migrations as any other
+# role and every future table reaches the API with no grants at all.
+#
+# The two one-shot services (migrate, app-role) sit behind the `tools` profile so a
+# bare `docker compose up` does not try to keep them running. The Makefile invokes
+# them with `docker compose run --rm`, which activates the profile automatically and
+# gives make a real exit code to propagate -- `up --wait` treats a service that
+# exits as a failure, which is exactly what a one-shot is supposed to do.
+#
+# No `api` service yet: cmd/api does not exist until item 04, which adds it here.
+
+name: krane
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-krane_migrator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_only_migrator}
+      POSTGRES_DB: ${POSTGRES_DB:-krane}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # /var/lib/postgresql, NOT /var/lib/postgresql/data. The postgres:18+ images
+      # store data in a major-version subdirectory so `pg_upgrade --link` can work
+      # across a single mount point; mounting the old 9.x-17 path makes the
+      # container refuse to start outright. See docker-library/postgres#1259.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-krane_migrator} -d ${POSTGRES_DB:-krane}"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+      start_period: 3s
+
+  # Mock OIDC issuer. The API validates JWTs against its JWKS and never mints
+  # them; swapping this for a hosted issuer is one env var (item 06).
+  # No healthcheck: the image ships without a shell to run one in, so the
+  # Makefile polls the discovery endpoint from the host instead.
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    environment:
+      SERVER_PORT: 8080
+    ports:
+      - "${OIDC_PORT:-9090}:8080"
+
+  # One-shot. The Makefile appends `-database <dsn> up`, so the same service
+  # migrates both the dev database and the throwaway test one.
+  migrate:
+    image: migrate/migrate:v4.18.1
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["migrate", "-path", "/migrations"]
+
+  # One-shot. Sets the runtime role's password from the environment: item 02
+  # creates krane_app with LOGIN and no password on purpose, because a
+  # credential must never be committed inside a migration.
+  # :'app_password' is psql's quote-and-escape form -- never string-concatenate
+  # a password into DDL.
+  app-role:
+    image: postgres:18.6
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-krane_migrator}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_only_migrator}
+      PGDATABASE: ${POSTGRES_DB:-krane}
+      KRANE_APP_USER: ${KRANE_APP_USER:-krane_app}
+      KRANE_APP_PASSWORD: ${KRANE_APP_PASSWORD:-dev_only_app}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        psql -v ON_ERROR_STOP=1 -v app_user="$$KRANE_APP_USER" -v app_password="$$KRANE_APP_PASSWORD" <<'SQL'
+        ALTER ROLE :"app_user" WITH PASSWORD :'app_password';
+        SQL
+
+volumes:
+  pgdata:
