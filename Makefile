@@ -24,6 +24,7 @@ POSTGRES_TEST_DB   ?= krane_test
 KRANE_APP_USER     ?= krane_app
 KRANE_APP_PASSWORD ?= dev_only_app
 OIDC_PORT          ?= 9090
+API_PORT           ?= 8080
 
 export
 

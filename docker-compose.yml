@@ -10,7 +10,11 @@
 # gives make a real exit code to propagate -- `up --wait` treats a service that
 # exits as a failure, which is exactly what a one-shot is supposed to do.
 #
-# No `api` service yet: cmd/api does not exist until item 04, which adds it here.
+# `api` (item 04) is NOT started by `make up`: `make test` runs `go test ./...`
+# directly against Postgres on the host (same pattern as migrations/schema_test.go),
+# so the graded pipeline never needs a containerized API process. This service is
+# for a full local-stack run -- `docker compose up api` -- matching the topology in
+# docs/components.md.
 
 name: krane
 
@@ -83,6 +87,25 @@ services:
         psql -v ON_ERROR_STOP=1 -v app_user="$$KRANE_APP_USER" -v app_password="$$KRANE_APP_PASSWORD" <<'SQL'
         ALTER ROLE :"app_user" WITH PASSWORD :'app_password';
         SQL
+
+  # cmd/api, containerized. Not part of `make up`'s default set -- see the note
+  # above the `postgres` service. `HTTP_PORT` is the fixed in-container port
+  # (matches the Dockerfile's EXPOSE 8080); `API_PORT` is the host-side mapping,
+  # named like `POSTGRES_PORT`/`OIDC_PORT`.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ENV: ${ENV:-development}
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgres://${KRANE_APP_USER:-krane_app}:${KRANE_APP_PASSWORD:-dev_only_app}@postgres:5432/${POSTGRES_DB:-krane}?sslmode=disable
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
