@@ -138,7 +138,7 @@ Both `EXCLUDE` constraints are **partial** (`WHERE deleted_at IS NULL`) so a sof
 - **`events.timezone`** holds an IANA name (`Asia/Colombo`), never a fixed offset — an offset cannot survive a DST transition, which is the item 12 test.
 - **`tstzrange`** rather than `starts_at`/`ends_at` because `EXCLUDE` needs a range type. Two columns would push the overlap check back into Go, which is the check-then-act race the brief is testing for.
 - **`version`** is on every mutable row (`events`, `rooms`, `sessions`). Updates are `WHERE id = $1 AND version = $2`; 0 rows affected is a 409, never a last-write-wins.
-- **`deleted_at`** — soft delete on `events` and `sessions` only. Membership, rooms and invitations are removed outright.
+- **`deleted_at`** — soft delete on `events` and `sessions` only. Membership, rooms and invitations are removed outright. Because item 16's `EXCLUDE` constraints are partial on this column, soft-deleting a session **releases its room and speaker slot immediately** — an intended product rule (D9, [`requirements.md`](./requirements.md) §7.3), not a side effect.
 - **`audit_log.entity_id` has no FK** on purpose: the log must outlive whatever it describes.
 - **Grants:** the application role holds `INSERT, SELECT` on `audit_log` and nothing else. Append-only is enforced by the grant, not by discipline.
 

@@ -245,6 +245,8 @@ Recorded here so items 02–23 do not re-litigate them.
 | D6 | `role_permissions` presence *is* permission | a boolean `allowed` column | A three-valued permission table is a bug waiting to be read backwards. |
 | D7 | Mermaid-in-Markdown for both diagrams | rendered PNG/SVG, dbml | Renders on GitHub, diffs as text, and item 27's refresh is a text edit. |
 | D8 | **Rooms are per-event.** `rooms.event_id` FK → `events`. Cross-event physical-room conflicts are **out of scope** | shared physical rooms with an `event_room_usage` join table | Keeps item 16's `EXCLUDE` clean and honest — the constraint covers exactly the conflicts the model claims to have. See §7.1. |
+| D9 | **Soft-deleting a session releases its room and speaker slot immediately.** Item 16's `EXCLUDE` constraints are partial (`WHERE deleted_at IS NULL`) | a non-partial `EXCLUDE`, where a cancelled session keeps blocking its room forever | Cancelling a session should free the slot; the row stays so `audit_log` history resolves. Chosen, not inherited from the partial index — see §7.3. |
+| D10 | `event_members.role` and `invitations.role` carry `CHECK (role IN ('admin','contributor','attendee'))` | no CHECK, with `role_permissions` as the sole registry | A typo'd role is rejected at write time rather than silently granting nothing. Cost: a fourth role is `INSERT`s into `role_permissions` **plus** one `ALTER` — a migration, never a handler edit, so the chokepoint invariant holds. `role_permissions.role` is deliberately left unconstrained: it *is* the registry. For item 24's ADR. |
 
 ---
 
@@ -274,7 +276,15 @@ The brief says an *attendee* must never see the roster or anyone's email, and th
 
 **Current assumption:** contributors may `member:read` and see the roster; email visibility is admin-only. The item 10 `must:` test asserts the attendee case, which is the one the brief names — so this assumption does not weaken any graded proof.
 
-### 7.3 Draft email (not sent)
+### 7.3 Decided — cancelling a session frees its slot at once (D9)
+
+Item 16's exclusion constraints are partial: `EXCLUDE USING gist (room_id WITH =, time_range WITH &&) WHERE (deleted_at IS NULL)`. That is a **product rule**, stated here so it is implemented deliberately rather than inherited as a side effect of the `WHERE` clause:
+
+> Cancelling a session frees its room and its speaker for that slot immediately. The slot is rebookable the moment the session is soft-deleted, and the cancelled row remains so `audit_log` history stays resolvable. There is no hold period, and restoring a soft-deleted session whose slot has since been rebooked is **not supported** — the restore would violate the constraint and return 409.
+
+The alternative, a non-partial `EXCLUDE`, would let a cancelled session block its room forever. That is worse, but it was a choice, and item 16 implements the rule above rather than discovering it.
+
+### 7.4 Draft email (not sent)
 
 > Subject: Event Management take-home — one clarification
 >
