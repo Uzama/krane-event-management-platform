@@ -1,0 +1,49 @@
+FEATURES.md
+  s_c160752f808816::t_2c2af82d07ad26 29
+  s_c160752f808816::t_2aa5afac7f11b1 22
+  s_c160752f808816::t_53681440cca292 15
+  s_c160752f808816::t_d39b210d0f88a9 1-2,4
+  h_9e2a12161bab30 3,5-10,12-14,16,18-21,23,25-26,28,30-37,39-41,43-44,46,48,54-60,63
+  s_c160752f808816::t_539241fec0fbe6 11
+  s_c160752f808816::t_52bc5e54adf857 27
+  s_c160752f808816::t_8acb61d0be4a69 38
+  s_c160752f808816::t_adb6512086f590 42
+  s_c160752f808816::t_15517d8dacae68 45,47,49-53
+  s_c160752f808816::t_43c232d0a05619 24
+  s_c160752f808816::t_a2bbbb9532adc0 17
+  s_c160752f808816::t_1c1f02f663d355 61-62
+CLAUDE.md
+  s_c160752f808816::t_e4b895eed790b5 83
+  s_c160752f808816::t_282a9a603e30cc 9-10
+  s_c160752f808816::t_44678abd03c43e 166
+  s_c160752f808816::t_7997fdcdbb0672 159,162
+FAILURES.md
+  s_c160752f808816::t_b58b234502535c 3,5,7
+go.mod
+  s_c160752f808816::t_a9b5b2d5924bea 1-3
+ISSUE.md
+  s_c160752f808816::t_84bdf8cedd9358 1-12
+AUDIT.md
+  s_c160752f808816::t_5c816a0f2418c9 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "5e9bf1040dda109709909277f9e77ce4cf857e1f",
+  "prompts": {},
+  "humans": {
+    "h_9e2a12161bab30": {
+      "author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  },
+  "sessions": {
+    "s_c160752f808816": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84ab70ff-316a-419c-9ff3-d72f35ebd25a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
