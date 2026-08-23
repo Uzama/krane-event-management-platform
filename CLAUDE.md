@@ -6,6 +6,8 @@ Event Management Platform — a Go REST/JSON API over Postgres 18, with a thin r
 
 Known repo mistakes and gotchas: @FAILURES.md — read it before starting any task.
 
+> **Repo is pre-code.** The tree below is the *target* layout, not what exists. There is no `go.mod`, `Makefile`, or `docker-compose.yml` yet, so `make up/seed/test` do not run — scaffolding is feature 1 in `FEATURES.md`. Delete this note once it lands.
+
 ## What this repo is — clean architecture
 
 Dependencies point inward to `domain`. The domain knows nothing about the outer layers; everything else depends on it. Interfaces live in `domain`; `adapter` implements them. `container` wires concrete adapters into domain services and into `http`; `bootstrap` runs it; `cmd` just calls `bootstrap`.
@@ -78,7 +80,7 @@ Push every guarantee into Postgres; never trust check-then-act in Go.
 - **Lost-update protection.** Every mutable row has a `version` column. Updates are `WHERE id = $ AND version = $`; 0 rows affected → 409 with the current state. Never last-write-wins.
 - **PATCH semantics.** An absent field and an explicit `null` are different requests. Never model both as a plain `*string`. Use a presence-tracking `Optional[T]`. Build the UPDATE from only the fields that were set (goqu).
 - **Pagination is keyset only.** Order by `(created_at, id)` or uuidv7 id, opaque base64 cursor. Never `OFFSET`.
-- **Query count independent of result size.** No N+1. Fetch each collection in one query and stitch in Go, or JOIN/aggregate. Prove it with a query-counting test.
+- **Query count independent of result size.** No N+1 — never fetch related rows in a loop. Batch with `WHERE id = ANY($1)` or JOIN/aggregate and stitch in Go. Prove it with a query-counting test.
 - **Idempotent writes.** Bulk/mutating operations honour an `Idempotency-Key` backed by a unique constraint. Retries replay the stored result; they never double-send. Partial failure returns a defined per-item result, not an accident.
 - **Audit is append-only.** Write the audit row in the *same transaction* as the mutation. Capture before/after with `UPDATE ... RETURNING OLD, NEW` (PG18). The DB role has INSERT/SELECT on `audit_log` only — no UPDATE/DELETE grant.
 - **Time is timestamptz.** Every event stores an IANA timezone name (`Asia/Colombo`, `America/New_York`). Never naive timestamps, never fixed UTC offsets. Seed data crosses a DST boundary.
@@ -154,13 +156,14 @@ make lint          # gofmt/vet/golangci-lint
 ```
 
 - Run `make test` after every meaningful edit, not once at the end.
+- To iterate on one failing test, `make up` first (the suite needs Postgres), then run it directly: `go test ./internal/domain/session/ -run TestCreateSession -race -count=1`.
 - Tests run against real Postgres, not mocks. Repo and integration tests use a throwaway database.
 - Do not start the server and leave it running to "verify" a change — it never exits. Use `make test`.
-- For concurrency, write the failing test first and confirm it actually races (goroutines released together on a barrier), not sequential calls that can't catch the bug.
+- For concurrency, write the failing test first and confirm it actually races (goroutines released together on a barrier), not sequential calls that can't catch the bug. Always run these with `-race`.
 
 ## Stack (fixed — do not substitute)
 
-- Go, REST/JSON, OpenAPI via oapi-codegen, goqu, sqlx + pgx, golang-migrate.
+- Go 1.23, REST/JSON, OpenAPI via oapi-codegen, goqu, sqlx + pgx, golang-migrate.
 - PostgreSQL 18 — required, not a floor. Prefer PG18-native features: `EXCLUDE`/temporal constraints, `RETURNING OLD/NEW`, `uuidv7()`.
 - Ask before adding any dependency. Prefer the standard library. Exact versions only, lockfile committed. Nothing single-maintainer or freshly published for anything touching auth, crypto, or networking.
 
