@@ -1,0 +1,69 @@
+AUDIT.md
+  s_6a458f1f35d351::t_08749fcdd58062 80-97
+internal/http/handler/health.go
+  s_6a458f1f35d351::t_b4ce6601821f99 1-53
+internal/http/server_test.go
+  s_6a458f1f35d351::t_06c8d2cbf85ccb 1-109
+cmd/api/main.go
+  s_6a458f1f35d351::t_8ffd902542cbe0 1-22
+internal/utils/config_test.go
+  s_6a458f1f35d351::t_63a820daa02324 1-53
+docker-compose.yml
+  s_6a458f1f35d351::t_29bda554e111ac 91-109
+  s_6a458f1f35d351::t_26e6d3362ce22e 13-17
+FEATURES.md
+  s_6a458f1f35d351::t_f7cae25d2aebe1 18
+internal/container/container_test.go
+  s_6a458f1f35d351::t_2957a0d6c806cc 1-82
+Makefile
+  s_6a458f1f35d351::t_ca5f841901209d 27
+internal/http/handler/health_test.go
+  s_6a458f1f35d351::t_a90690a7620f5c 1-15,17-151
+  s_6a458f1f35d351::t_4f17571295d899 16
+internal/http/response/error_test.go
+  s_6a458f1f35d351::t_6100c3875e810e 1-62
+.env.example
+  s_6a458f1f35d351::t_0b0fbf2de9dfdd 44-51
+internal/utils/logger_test.go
+  s_6a458f1f35d351::t_43dfe52a9da7a8 1-48
+go.mod
+  s_6a458f1f35d351::t_1bcd4cb9ebdf6f 10,12
+internal/utils/db_test.go
+  s_6a458f1f35d351::t_c7b7ffb7b4694f 1-74
+internal/container/container.go
+  s_6a458f1f35d351::t_3f495f7efdbb25 1-43
+internal/http/server.go
+  s_6a458f1f35d351::t_7dafc053faa9bb 1-65
+Dockerfile
+  s_6a458f1f35d351::t_6fc4a172183fe9 1-31
+internal/utils/config.go
+  s_6a458f1f35d351::t_6aa20758a44b76 1-32
+internal/http/router.go
+  s_6a458f1f35d351::t_165ca0f12a8e2b 1-20
+internal/http/response/error.go
+  s_6a458f1f35d351::t_34a22290ef9a88 1-43
+internal/utils/db.go
+  s_6a458f1f35d351::t_5ca5dd99270249 1-45
+internal/bootstrap/bootstrap_test.go
+  s_6a458f1f35d351::t_162823cc87c99a 1-45
+internal/utils/logger.go
+  s_6a458f1f35d351::t_c33d835f524d8a 1-27
+internal/bootstrap/bootstrap.go
+  s_6a458f1f35d351::t_164ab38c4f0b5a 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "27309be32baa656dcf914ac43d5049f986b692c5",
+  "prompts": {},
+  "sessions": {
+    "s_6a458f1f35d351": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d8c7818-c760-4491-a8a4-7dc210f751a7",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
