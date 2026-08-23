@@ -1,0 +1,40 @@
+docs/components.md
+  s_11eb6e2a9e4d76::t_9c90c48c66b994 1-16,18-32,34-39,41-183
+  s_11eb6e2a9e4d76::t_33104d822cd7b3 17,33,40
+AUDIT.md
+  s_11eb6e2a9e4d76::t_4ec19fb997e885 21-33
+docs/requirements.md
+  s_11eb6e2a9e4d76::t_b477d2dbe060c9 1-80,82-176,178-246,248-250,252,254,256,258,262,264,266,268,270,272,274,276,280-282,284,286,288-296,299-310
+  s_11eb6e2a9e4d76::t_f27e6881a3b556 81,177,247,251,253,255,257,259-261,263,265,267,269,271,273,275,277-279,283,285,287,297-298
+docs/er-diagram.md
+  s_11eb6e2a9e4d76::t_f27e6881a3b556 48,148
+  s_11eb6e2a9e4d76::t_c1f3f9d628b619 1-47,49-147
+FEATURES.md
+  s_11eb6e2a9e4d76::t_4ec19fb997e885 15
+docs/assignment.md
+  s_1933ba813434b4::t_04fe0e64b0bceb 1-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f742e4fa7ed822c0132ea2d39c696453eb00d488",
+  "prompts": {},
+  "sessions": {
+    "s_11eb6e2a9e4d76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a59dc7c8-de61-4476-866a-9d8a519fbfe5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    },
+    "s_1933ba813434b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9251a090-c25c-4fb2-9428-ca253a1b97ac",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
