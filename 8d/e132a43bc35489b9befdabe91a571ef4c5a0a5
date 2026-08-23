@@ -1,0 +1,38 @@
+.claude/skills/test-driven-development/writing-good-tests.md
+  h_9e2a12161bab30 1-198
+.claude/skills/api-design/SKILL.md
+  h_9e2a12161bab30 1-527
+.claude/skills/ponytail/SKILL.md
+  h_9e2a12161bab30 1-121
+.claude/skills/golang-testing/SKILL.md
+  h_9e2a12161bab30 1-720
+.claude/skills/error-handling/SKILL.md
+  h_9e2a12161bab30 1-152
+.claude/skills/test-driven-development/SKILL.md
+  h_9e2a12161bab30 1-334
+.claude/skills/golang-patterns/SKILL.md
+  h_9e2a12161bab30 1-673
+.claude/settings.json
+  s_1933ba813434b4::t_50a8712cfd3883 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "8de132a43bc35489b9befdabe91a571ef4c5a0a5",
+  "prompts": {},
+  "humans": {
+    "h_9e2a12161bab30": {
+      "author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  },
+  "sessions": {
+    "s_1933ba813434b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9251a090-c25c-4fb2-9428-ca253a1b97ac",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
