@@ -1,0 +1,16 @@
+CLAUDE.md
+  h_9e2a12161bab30 1-197
+FAILURES.md
+  h_9e2a12161bab30 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "3f0e05073ba0df2629e23cb81be2fb5d4acc532a",
+  "prompts": {},
+  "humans": {
+    "h_9e2a12161bab30": {
+      "author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
