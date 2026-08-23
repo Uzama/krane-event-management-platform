@@ -116,24 +116,24 @@ Every feature runs through this loop. Do not skip or reorder steps. Do not bypas
 
 1. **Plan (plan mode).** Read the relevant requirement, the invariants above, and `@FAILURES.md` so past mistakes aren't repeated. Use **AskUserQuestion** to resolve every ambiguity — no assumptions.
 2. **Plan review — STOP.** Present the plan as a table for sign-off: `What | Before → After | Why | How`. State which invariants apply and how the plan satisfies each. Wait for approval before writing code.
-3. **Implement, test-first (TDD).** Write the failing test first; watch it fail for the right reason; then make it pass. Keep each change small enough for a human to review in one sitting. If it's too big, break it into tasks and do them one at a time.
+3. **Branch, then implement test-first (TDD).** Cut the feature branch off `main` before the first edit (see **Git**). Write the failing test first; watch it fail for the right reason; then make it pass. Keep each change small enough for a human to review in one sitting. If it's too big, break it into tasks and do them one at a time — all on the same branch.
 4. **Green is mandatory.** Run `make test`. Never report success on a red loop. Never `t.Skip`, comment out, or weaken a test to reach green. If a test is wrong, say so and explain why before touching it.
 5. **Implementation review — STOP.** Present changes as a table: `File | Change | Why | Requirement it satisfies`. Self-audit: for each applicable invariant, name the line that enforces it and the test that proves it. List anything you were unsure about or deviated from. Wait for review.
 6. **Remaining tasks.** If the feature has more tasks, return to step 3 for the next one.
-7. **Commit — STOP.** When all tasks are done, show the proposed commit message for review. Wait for confirmation.
-8. **Commit** only after confirmation. When a commit fixes something you got wrong, say so in the message.
-9. **Log.** Append a timestamped entry to `AUDIT.md` describing the work done.
-10. Mark the feature done in `FEATURES.md`, then go to the next.
+7. **Log before committing.** Append a timestamped entry to `AUDIT.md` describing the work done, and — only if the feature is fully finished — mark it done in `FEATURES.md`. These land in the same commit as the work, never in a later one.
+8. **Commit — STOP.** When all tasks are done, show the proposed commit message for review. Wait for confirmation.
+9. **Commit** only after confirmation — on the feature branch, never on `main`. Stage the `AUDIT.md` and `FEATURES.md` updates from step 7 along with the change.
+10. Stop and hand the branch over. The human merges; the next feature branches off `main` after they have.
 
 ## The bug workflow
 
 1. **Root cause first.** Diagnose from the given information. If you need more, use **AskUserQuestion** — do not guess and patch symptoms.
 2. **Solution review — STOP.** Describe the root cause and the proposed fix. Wait for approval.
-3. **Implement** the fix. Tests must be green, including a test that reproduces the bug.
+3. **Implement** the fix on a `fix/<kebab-slug>` branch (see **Git**). Tests must be green, including a test that reproduces the bug.
 4. **Fix review — STOP.** Show the change as a table. Wait for review.
-5. **Log the issue.** Append root cause + solution to `ISSUE.md`.
-6. **Commit — STOP.** Show the commit message. Wait for confirmation, then commit.
-7. **Log.** Append a timestamped entry to `AUDIT.md`.
+5. **Log before committing.** Append root cause + solution to `ISSUE.md`, and a timestamped entry to `AUDIT.md`. If the fix reveals a rule that wasn't written down, add the one-line imperative to `FAILURES.md` now too.
+6. **Commit — STOP.** Show the commit message. Wait for confirmation.
+7. **Commit** only after confirmation — on the `fix/` branch, with the step-5 log entries staged alongside the fix.
 
 ## Human gates are absolute
 
@@ -143,6 +143,13 @@ Every feature runs through this loop. Do not skip or reorder steps. Do not bypas
 - Stay on the current task. Don't drift into adjacent work.
 - Before starting any task or bug, read `@FAILURES.md` and `ISSUE.md`; do not repeat a logged mistake.
 - Use skills when one applies.
+
+## Git
+
+- **One branch per feature.** Branch off `main` before the first edit of a `FEATURES.md` item: `feature/<nn>-<kebab-slug>` — e.g. `feature/01-er-diagram`. Bugs use `fix/<kebab-slug>`. Every task and commit for that item lives on that branch.
+- **Never touch `main`.** Do not commit to it, merge into it, or push. Work stops when the branch is committed; the human reviews and merges. Do not start the next feature until they have.
+- **Commit messages are point form and high level.** A short subject line, then bullets. Each bullet says *what changed and why it matters* — not how, not which files. The diff already carries the detail; don't restate it. If a bullet only makes sense next to the diff, cut it.
+- When a commit fixes something you got wrong, say so in the message.
 
 ## The loop (commands)
 

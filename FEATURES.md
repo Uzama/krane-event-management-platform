@@ -8,7 +8,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done. Each item lists its scope
 
 ## Phase 0 — Project init
 
-- [ ] **00 · git-ai + repo skeleton.** Mostly done: `git init`, `.gitignore`, `CLAUDE.md`, `FAILURES.md`, `FEATURES.md`, `AUDIT.md`, `ISSUE.md` all exist, and git-ai capture is verified live (`git-ai status` attributes checkpoints to both human and model). Remaining: `go mod init`, then commit.
+- [x] **00 · git-ai + repo skeleton.** `git init`, `.gitignore`, `CLAUDE.md`, `FAILURES.md`, `FEATURES.md`, `AUDIT.md`, `ISSUE.md`, and `go.mod` (module `github.com/Uzama/krane-event-management-platform`, Go 1.23.0). git-ai capture verified live — `git-ai status` attributes checkpoints to both human and model. Commit `5e9bf10`.
 
 ## Phase 1 — Design & scaffolding
 
