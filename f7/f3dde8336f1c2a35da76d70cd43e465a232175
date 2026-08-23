@@ -1,0 +1,31 @@
+docs/er-diagram.md
+  s_5c3f542bfe047f::t_3be448712a015f 141
+docs/requirements.md
+  s_5c3f542bfe047f::t_3be448712a015f 248-249,279-287
+migrations/20260823164421_init_schema.down.sql
+  s_5c3f542bfe047f::t_109c02245a55c5 15-22
+  s_5c3f542bfe047f::t_96164db962c1d8 1-14,23-55
+AUDIT.md
+  s_5c3f542bfe047f::t_edea5541c65d6f 34-53
+migrations/20260823164421_init_schema.up.sql
+  s_5c3f542bfe047f::t_031203d05d2dbf 1-172,179-262,264-271,283-285,292-293
+  s_5c3f542bfe047f::t_a0ca56e7ebe0af 173-178,263,272-282,286-291,294-302
+FEATURES.md
+  s_5c3f542bfe047f::t_50a426db6304cb 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f7f3dde8336f1c2a35da76d70cd43e465a232175",
+  "prompts": {},
+  "sessions": {
+    "s_5c3f542bfe047f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa674a97-d76a-4c97-8ce3-f0b6ae6fa4d7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
