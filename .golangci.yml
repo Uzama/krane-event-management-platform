@@ -1,0 +1,25 @@
+# Pinned alongside golangci/golangci-lint:v1.62.2-alpine in the Makefile.
+# Keep the two in step -- a config written for a different version fails closed.
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    # CLAUDE.md: "No ignored errors. Handle it meaningfully or return it."
+    # errcheck is the only thing that actually enforces that.
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - bodyclose
+    - rowserrcheck
+
+issues:
+  # Defaults hide several errcheck and staticcheck findings in tests. Tests are
+  # where the correctness proofs live here, so they are held to the same bar.
+  exclude-use-default: false
