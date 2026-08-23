@@ -1,0 +1,49 @@
+ISSUE.md
+  s_3b5ad7aac33641::t_e72deeca3fbbff 13-24
+AUDIT.md
+  s_3b5ad7aac33641::t_6a42c66afe2155 54-79
+docker-compose.yml
+  s_3b5ad7aac33641::t_67efa23945d53f 83-85
+  s_3b5ad7aac33641::t_32bdaec667bd98 1-26,32-82,86-88
+  s_3b5ad7aac33641::t_ad30f0c9f2eba1 27-31
+go.mod
+  s_3b5ad7aac33641::t_2711d522ada02a 4-12
+CLAUDE.md
+  s_3b5ad7aac33641::t_d868b4d2950b2e 9,159,163,166
+  s_3b5ad7aac33641::t_e2ef3338c3d58b 170-172
+  s_3b5ad7aac33641::t_d09e8b283cefc1 167
+.env.example
+  s_3b5ad7aac33641::t_2232c0a9bbf3ce 1-43
+Makefile
+  s_3b5ad7aac33641::t_69db38fd131458 1-147
+FAILURES.md
+  s_3b5ad7aac33641::t_e2ef3338c3d58b 7-8
+FEATURES.md
+  s_3b5ad7aac33641::t_6a42c66afe2155 17
+migrations/schema_test.go
+  s_3b5ad7aac33641::t_a546081b771cef 1-184
+scripts/require-go.sh
+  s_3b5ad7aac33641::t_9b5f9d9bb6ace3 1-60
+.github/workflows/ci.yml
+  s_3b5ad7aac33641::t_4f3ea932a8ac3a 1-35
+.golangci.yml
+  s_3b5ad7aac33641::t_34b2a6f856263f 1-25
+go.sum
+  s_3b5ad7aac33641::t_71ce765f9d3ec1 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "15cf589acc31c7bcd267ecd45d914ea7fe64b630",
+  "prompts": {},
+  "sessions": {
+    "s_3b5ad7aac33641": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1a275c6-ff4f-4380-944b-379acd84f75b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
