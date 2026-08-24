@@ -1,0 +1,80 @@
+internal/http/gen/api.gen.go
+  s_5b13052dd9bc1e::t_423c850a49ab61 22-63,186-216,384-391,437-439,478-483,723-803,1547-1548
+docs/requirements.md
+  s_5b13052dd9bc1e::t_3dabee3f7a9492 253-254
+  s_5b13052dd9bc1e::t_dfc1c0e0d68da0 323-326
+internal/adapter/postgres/roles.go
+  s_5b13052dd9bc1e::t_051aea5f85e38d 1-33
+internal/adapter/postgres/invitation_repo_test.go
+  s_5b13052dd9bc1e::t_e46164309e7401 113,139
+  s_5b13052dd9bc1e::t_8a36a830bd3594 1-12,14-112,114-138,140-231
+  s_5b13052dd9bc1e::t_8ed5974d3fe3ad 13
+internal/http/router.go
+  s_5b13052dd9bc1e::t_d9e4c0f19952e2 116-118
+  s_5b13052dd9bc1e::t_22d16c56b9f980 65-71
+  s_5b13052dd9bc1e::t_8d679d2c242396 19-24
+  s_5b13052dd9bc1e::t_035d0e98036a60 89-91
+internal/domain/invitation/service_test.go
+  s_5b13052dd9bc1e::t_bf2e22461553e0 1-77
+internal/http/request/invitation_test.go
+  s_5b13052dd9bc1e::t_ec0f041bfb4ba5 1-63
+internal/domain/invitation/port.go
+  s_5b13052dd9bc1e::t_125dd7e84fc555 1-53
+internal/http/request/invitation.go
+  s_5b13052dd9bc1e::t_211a5ef26687d7 1-35
+internal/bootstrap/bootstrap.go
+  s_5b13052dd9bc1e::t_d36bf8f663f09b 33
+internal/http/invitations_integration_test.go
+  s_5b13052dd9bc1e::t_e7460b47c73d78 1-263
+FEATURES.md
+  s_5b13052dd9bc1e::t_e2dcb20aafba3f 30
+AUDIT.md
+  s_5b13052dd9bc1e::t_cfbaa96de6f957 249-264
+internal/domain/invitation/entity.go
+  s_5b13052dd9bc1e::t_3e0ab94bf54f08 1-24
+internal/container/container.go
+  s_5b13052dd9bc1e::t_67252fdd3a21dc 18
+  s_5b13052dd9bc1e::t_57de51ef982d8a 80,93
+  s_5b13052dd9bc1e::t_a2bfc7eb479925 45
+internal/adapter/postgres/member_repo_test.go
+  s_5b13052dd9bc1e::t_7d43902934ec6e 181-211
+openapi/openapi.yaml
+  s_5b13052dd9bc1e::t_76b744594ecb59 779-880
+  s_5b13052dd9bc1e::t_2d4ededd413ff0 1395-1471
+internal/http/response/invitation.go
+  s_5b13052dd9bc1e::t_dcf419da8068a5 1-59
+FAILURES.md
+  s_5b13052dd9bc1e::t_6a638b1e0105e6 14
+internal/adapter/postgres/member_repo.go
+  s_5b13052dd9bc1e::t_def65018471cb7 97-101,111,118
+internal/adapter/postgres/invitation_repo.go
+  s_5b13052dd9bc1e::t_f9e7bbde69247a 8
+  s_5b13052dd9bc1e::t_98071afe77d425 80
+  s_5b13052dd9bc1e::t_e68104ecbeb169 113
+  s_5b13052dd9bc1e::t_7fd90ebdfee8a2 1-7,9-30,50-79,81-112,114-157
+  s_5b13052dd9bc1e::t_bb5cc4b762165a 31-49
+internal/http/response/invitation_test.go
+  s_5b13052dd9bc1e::t_fd8876aec74a6b 1-91
+internal/http/handler/invitation.go
+  s_5b13052dd9bc1e::t_9ae8b33755577f 1-150
+internal/domain/invitation/service.go
+  s_5b13052dd9bc1e::t_554de989ee4be9 1-24
+internal/http/handler/invitation_test.go
+  s_5b13052dd9bc1e::t_4d3bef6309ed9d 1-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "a982a5b7e33c146c4c3b84c951030a683ecb5920",
+  "prompts": {},
+  "sessions": {
+    "s_5b13052dd9bc1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa8da185-3964-48d0-88a3-d4f747ad3030",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
