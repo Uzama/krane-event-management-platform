@@ -1,0 +1,25 @@
+internal/adapter/postgres/audit_consolidated_test.go
+  s_f76373887302cf::t_763eba8752e338 1-5,7-16,18-264,266-268
+  s_f76373887302cf::t_adaf102a13bd4f 6,17
+  s_f76373887302cf::t_40d3af8dad21d3 265
+AUDIT.md
+  s_f76373887302cf::t_9a3a1e8b0980ec 389-396
+FEATURES.md
+  s_f76373887302cf::t_bcd7fe6bc0a318 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "be7f8957880a82d95abeaca200702e24e46088f7",
+  "prompts": {},
+  "sessions": {
+    "s_f76373887302cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd3befaf-c6ad-4ab6-88d8-dec1b8de0b55",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
