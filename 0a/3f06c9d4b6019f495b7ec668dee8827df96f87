@@ -1,0 +1,19 @@
+event_platform_er_diagram.html
+  s_7158837a6e8456::t_e788a6102b332e 1-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "0a3f06c9d4b6019f495b7ec668dee8827df96f87",
+  "prompts": {},
+  "sessions": {
+    "s_7158837a6e8456": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f6ae1bc-87ec-43b0-90c9-e82bc6bda847",
+        "model": "unknown"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
