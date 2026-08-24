@@ -77,6 +77,82 @@ func (r CreateSessionRequest) ToCreateInput(loc *time.Location) session.CreateIn
 	}
 }
 
+// knownFreqs mirrors session_series' freq CHECK constraint (item 23).
+var knownFreqs = map[string]bool{"daily": true, "weekly": true}
+
+// SeriesCreateRequest is POST /v1/events/{eventId}/sessions/series' body
+// (item 23). FirstStartsAt/FirstEndsAt are wire-format local wall-clock
+// strings, resolved against the event's timezone exactly like
+// CreateSessionRequest -- every later occurrence's instant is derived from
+// these, server-side, never supplied by the caller.
+type SeriesCreateRequest struct {
+	RoomID        string  `json:"room_id"`
+	SpeakerID     string  `json:"speaker_id"`
+	Title         string  `json:"title"`
+	Description   *string `json:"description"`
+	FirstStartsAt string  `json:"first_starts_at"`
+	FirstEndsAt   string  `json:"first_ends_at"`
+	Freq          string  `json:"freq"`
+	IntervalCount int     `json:"interval_count"`
+	Occurrences   int     `json:"occurrences"`
+}
+
+func (r SeriesCreateRequest) Validate(loc *time.Location) map[string]any {
+	issues := map[string]any{}
+
+	if strings.TrimSpace(r.Title) == "" {
+		issues["title"] = "is required"
+	}
+	if strings.TrimSpace(r.RoomID) == "" {
+		issues["room_id"] = "is required"
+	}
+	if strings.TrimSpace(r.SpeakerID) == "" {
+		issues["speaker_id"] = "is required"
+	}
+	if !knownFreqs[r.Freq] {
+		issues["freq"] = "must be one of daily, weekly"
+	}
+	if r.IntervalCount <= 0 {
+		issues["interval_count"] = "must be a positive integer"
+	}
+	if r.Occurrences <= 0 || r.Occurrences > 52 {
+		issues["occurrences"] = "must be between 1 and 52"
+	}
+
+	startsAt, startsErr := utils.ResolveLocalTime(r.FirstStartsAt, loc)
+	if startsErr != nil {
+		issues["first_starts_at"] = resolveTimeIssue(startsErr)
+	}
+	endsAt, endsErr := utils.ResolveLocalTime(r.FirstEndsAt, loc)
+	if endsErr != nil {
+		issues["first_ends_at"] = resolveTimeIssue(endsErr)
+	}
+	if startsErr == nil && endsErr == nil && !endsAt.After(startsAt) {
+		issues["first_ends_at"] = "must be after first_starts_at"
+	}
+
+	return issues
+}
+
+// ToSeriesCreateInput converts a validated request into the domain input.
+// Callers must call Validate(loc) with the same *time.Location first, same
+// "Validate first" contract as CreateSessionRequest.ToCreateInput.
+func (r SeriesCreateRequest) ToSeriesCreateInput(loc *time.Location) session.SeriesCreateInput {
+	startsAt, _ := utils.ResolveLocalTime(r.FirstStartsAt, loc)
+	endsAt, _ := utils.ResolveLocalTime(r.FirstEndsAt, loc)
+	return session.SeriesCreateInput{
+		RoomID:        r.RoomID,
+		SpeakerID:     r.SpeakerID,
+		Title:         r.Title,
+		Description:   r.Description,
+		FirstStartsAt: startsAt,
+		FirstEndsAt:   endsAt,
+		Freq:          r.Freq,
+		IntervalCount: r.IntervalCount,
+		Occurrences:   r.Occurrences,
+	}
+}
+
 // PatchSessionRequest is PATCH /v1/events/{eventId}/sessions/{sessionId}'s
 // body. Version is required. RoomID/SpeakerID have no fields here at all --
 // not merely omitted from required, genuinely unpatchable

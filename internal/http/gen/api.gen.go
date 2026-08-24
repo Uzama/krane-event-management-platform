@@ -19,6 +19,27 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for BulkInviteItemResultStatus.
+const (
+	BulkInviteItemResultStatusConflict  BulkInviteItemResultStatus = "conflict"
+	BulkInviteItemResultStatusCreated   BulkInviteItemResultStatus = "created"
+	BulkInviteItemResultStatusForbidden BulkInviteItemResultStatus = "forbidden"
+)
+
+// Valid indicates whether the value is a known member of the BulkInviteItemResultStatus enum.
+func (e BulkInviteItemResultStatus) Valid() bool {
+	switch e {
+	case BulkInviteItemResultStatusConflict:
+		return true
+	case BulkInviteItemResultStatusCreated:
+		return true
+	case BulkInviteItemResultStatusForbidden:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationRole.
 const (
 	InvitationRoleAdmin       InvitationRole = "admin"
@@ -122,6 +143,82 @@ func (e MemberCreateRequestRole) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for SeriesFreq.
+const (
+	SeriesFreqDaily  SeriesFreq = "daily"
+	SeriesFreqWeekly SeriesFreq = "weekly"
+)
+
+// Valid indicates whether the value is a known member of the SeriesFreq enum.
+func (e SeriesFreq) Valid() bool {
+	switch e {
+	case SeriesFreqDaily:
+		return true
+	case SeriesFreqWeekly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SeriesCreateRequestFreq.
+const (
+	SeriesCreateRequestFreqDaily  SeriesCreateRequestFreq = "daily"
+	SeriesCreateRequestFreqWeekly SeriesCreateRequestFreq = "weekly"
+)
+
+// Valid indicates whether the value is a known member of the SeriesCreateRequestFreq enum.
+func (e SeriesCreateRequestFreq) Valid() bool {
+	switch e {
+	case SeriesCreateRequestFreqDaily:
+		return true
+	case SeriesCreateRequestFreqWeekly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SeriesOccurrenceResultStatus.
+const (
+	SeriesOccurrenceResultStatusConflict SeriesOccurrenceResultStatus = "conflict"
+	SeriesOccurrenceResultStatusCreated  SeriesOccurrenceResultStatus = "created"
+)
+
+// Valid indicates whether the value is a known member of the SeriesOccurrenceResultStatus enum.
+func (e SeriesOccurrenceResultStatus) Valid() bool {
+	switch e {
+	case SeriesOccurrenceResultStatusConflict:
+		return true
+	case SeriesOccurrenceResultStatusCreated:
+		return true
+	default:
+		return false
+	}
+}
+
+// BulkInviteItemResult defines model for BulkInviteItemResult.
+type BulkInviteItemResult struct {
+	Email openapi_types.Email `json:"email"`
+
+	// InvitationId Present only when status is "created".
+	InvitationId *openapi_types.UUID        `json:"invitation_id,omitempty"`
+	Status       BulkInviteItemResultStatus `json:"status"`
+}
+
+// BulkInviteItemResultStatus defines model for BulkInviteItemResult.Status.
+type BulkInviteItemResultStatus string
+
+// BulkInviteRequest defines model for BulkInviteRequest.
+type BulkInviteRequest struct {
+	Invitations []InvitationCreateRequest `json:"invitations"`
+}
+
+// BulkInviteResponse defines model for BulkInviteResponse.
+type BulkInviteResponse struct {
+	Results []BulkInviteItemResult `json:"results"`
 }
 
 // ErrorEnvelope defines model for ErrorEnvelope.
@@ -294,6 +391,58 @@ type RoomPatchRequest struct {
 	Version int `json:"version"`
 }
 
+// Series defines model for Series.
+type Series struct {
+	CreatedAt     time.Time                `json:"created_at"`
+	Description   *string                  `json:"description"`
+	EventId       openapi_types.UUID       `json:"event_id"`
+	Freq          SeriesFreq               `json:"freq"`
+	Id            openapi_types.UUID       `json:"id"`
+	IntervalCount int                      `json:"interval_count"`
+	Occurrences   []SeriesOccurrenceResult `json:"occurrences"`
+	RoomId        openapi_types.UUID       `json:"room_id"`
+	SpeakerId     openapi_types.UUID       `json:"speaker_id"`
+	Title         string                   `json:"title"`
+}
+
+// SeriesFreq defines model for Series.Freq.
+type SeriesFreq string
+
+// SeriesCreateRequest defines model for SeriesCreateRequest.
+type SeriesCreateRequest struct {
+	Description *string `json:"description,omitempty"`
+
+	// FirstEndsAt The first occurrence's local wall-clock end. Every later occurrence keeps this same duration.
+	FirstEndsAt string `json:"first_ends_at"`
+
+	// FirstStartsAt The first occurrence's local wall-clock start -- same format as SessionCreateRequest.starts_at.
+	FirstStartsAt string                  `json:"first_starts_at"`
+	Freq          SeriesCreateRequestFreq `json:"freq"`
+
+	// IntervalCount e.g. freq=weekly, interval_count=2 -> every other week.
+	IntervalCount int                `json:"interval_count"`
+	Occurrences   int                `json:"occurrences"`
+	RoomId        openapi_types.UUID `json:"room_id"`
+	SpeakerId     openapi_types.UUID `json:"speaker_id"`
+	Title         string             `json:"title"`
+}
+
+// SeriesCreateRequestFreq defines model for SeriesCreateRequest.Freq.
+type SeriesCreateRequestFreq string
+
+// SeriesOccurrenceResult defines model for SeriesOccurrenceResult.
+type SeriesOccurrenceResult struct {
+	// SessionId Present only when status is "created".
+	SessionId *openapi_types.UUID `json:"session_id,omitempty"`
+	StartsAt  time.Time           `json:"starts_at"`
+
+	// Status conflict means item 16's EXCLUDE rejected this occurrence -- the room or speaker was already booked at that instant. This occurrence is simply not materialized; the rest of the series is unaffected.
+	Status SeriesOccurrenceResultStatus `json:"status"`
+}
+
+// SeriesOccurrenceResultStatus conflict means item 16's EXCLUDE rejected this occurrence -- the room or speaker was already booked at that instant. This occurrence is simply not materialized; the rest of the series is unaffected.
+type SeriesOccurrenceResultStatus string
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt   time.Time `json:"created_at"`
@@ -305,11 +454,17 @@ type Session struct {
 	EventId         openapi_types.UUID `json:"event_id"`
 	Id              openapi_types.UUID `json:"id"`
 	RoomId          openapi_types.UUID `json:"room_id"`
-	SpeakerId       openapi_types.UUID `json:"speaker_id"`
-	StartsAt        time.Time          `json:"starts_at"`
-	Title           string             `json:"title"`
-	UpdatedAt       time.Time          `json:"updated_at"`
-	Version         int                `json:"version"`
+
+	// RoomName Present only on GET (list) rows (item 18) -- batched via a single JOIN so query count stays constant regardless of page size, never a per-row lookup. Absent (not null) on create/get single/update responses and on a version-conflict's details.current.
+	RoomName  *string            `json:"room_name,omitempty"`
+	SpeakerId openapi_types.UUID `json:"speaker_id"`
+
+	// SpeakerName Present only on GET (list) rows -- see room_name.
+	SpeakerName *string   `json:"speaker_name,omitempty"`
+	StartsAt    time.Time `json:"starts_at"`
+	Title       string    `json:"title"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
 }
 
 // SessionCreateRequest defines model for SessionCreateRequest.
@@ -389,6 +544,11 @@ type ListInvitationsParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// BulkCreateInvitationsParams defines parameters for BulkCreateInvitations.
+type BulkCreateInvitationsParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -437,6 +597,9 @@ type PatchEventJSONRequestBody = EventPatchRequest
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreateRequest
 
+// BulkCreateInvitationsJSONRequestBody defines body for BulkCreateInvitations for application/json ContentType.
+type BulkCreateInvitationsJSONRequestBody = BulkInviteRequest
+
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = MemberCreateRequest
 
@@ -451,6 +614,9 @@ type PatchRoomJSONRequestBody = RoomPatchRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = SessionCreateRequest
+
+// CreateSessionSeriesJSONRequestBody defines body for CreateSessionSeries for application/json ContentType.
+type CreateSessionSeriesJSONRequestBody = SeriesCreateRequest
 
 // PatchSessionJSONRequestBody defines body for PatchSession for application/json ContentType.
 type PatchSessionJSONRequestBody = SessionPatchRequest
@@ -481,6 +647,9 @@ type ServerInterface interface {
 	// Invite someone to an event
 	// (POST /v1/events/{eventId}/invitations)
 	CreateInvitation(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Invite several people to an event, idempotently
+	// (POST /v1/events/{eventId}/invitations/bulk)
+	BulkCreateInvitations(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params BulkCreateInvitationsParams)
 	// List an event's roster
 	// (GET /v1/events/{eventId}/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListMembersParams)
@@ -514,6 +683,9 @@ type ServerInterface interface {
 	// Create a session in an event
 	// (POST /v1/events/{eventId}/sessions)
 	CreateSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Create a recurring series of sessions
+	// (POST /v1/events/{eventId}/sessions/series)
+	CreateSessionSeries(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
 	// Delete a session
 	// (DELETE /v1/events/{eventId}/sessions/{sessionId})
 	DeleteSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, sessionId openapi_types.UUID, params DeleteSessionParams)
@@ -792,6 +964,65 @@ func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateInvitation(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BulkCreateInvitations operation middleware
+func (siw *ServerInterfaceWrapper) BulkCreateInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BulkCreateInvitationsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkCreateInvitations(w, r, eventId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1280,6 +1511,37 @@ func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CreateSessionSeries operation middleware
+func (siw *ServerInterfaceWrapper) CreateSessionSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSessionSeries(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteSession operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
@@ -1546,6 +1808,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}", wrapper.PatchEvent)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.ListInvitations)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/invitations/bulk", wrapper.BulkCreateInvitations)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.ListMembers)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.CreateMember)
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.RemoveMember)
@@ -1557,6 +1820,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.PatchRoom)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/sessions", wrapper.ListSessions)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/sessions", wrapper.CreateSession)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/sessions/series", wrapper.CreateSessionSeries)
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.DeleteSession)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.GetSession)
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.PatchSession)

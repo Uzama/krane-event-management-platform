@@ -37,6 +37,7 @@ type SessionService interface {
 	ListSessions(ctx context.Context, eventID string, limit int, after *session.Cursor) (session.Page, error)
 	UpdateSession(ctx context.Context, actorID, eventID, sessionID string, version int, patch session.Patch) (session.Session, error)
 	DeleteSession(ctx context.Context, actorID, eventID, sessionID string, version int) (session.Session, error)
+	CreateSeries(ctx context.Context, actorID, eventID string, in session.SeriesCreateInput) (session.Series, []session.SeriesOccurrenceResult, error)
 }
 
 // SessionHandler is thin: fetch the owning event (for its Timezone),
@@ -112,6 +113,49 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusCreated, response.NewSessionResponse(created, loc))
+}
+
+// CreateSeries handles POST /v1/events/{eventId}/sessions/series, mounted
+// behind Authz(session, create) -- the same permission a plain session
+// create uses, since every occurrence goes through the exact same write.
+func (h *SessionHandler) CreateSeries(w http.ResponseWriter, r *http.Request) {
+	actor, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		h.logger.Error("session: no authenticated user in context; Auth must run before this handler")
+		h.writeInternalError(w)
+		return
+	}
+
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		h.logger.Error("session: no eventId path value; route is not /v1/events/{eventId}/sessions/series")
+		h.writeInternalError(w)
+		return
+	}
+
+	_, loc, err := h.eventTimezone(r.Context(), eventID)
+	if err != nil {
+		h.writeEventLookupError(w, "session: creating series", eventID, err)
+		return
+	}
+
+	var req request.SeriesCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeValidationError(w, map[string]any{"body": "must be valid JSON"})
+		return
+	}
+	if issues := req.Validate(loc); len(issues) > 0 {
+		h.writeValidationError(w, issues)
+		return
+	}
+
+	series, results, err := h.service.CreateSeries(r.Context(), actor.ID, eventID, req.ToSeriesCreateInput(loc))
+	if err != nil {
+		h.writeCreateOrUpdateError(w, "session: creating series", eventID, err)
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, response.NewSeriesResponse(series, results, loc))
 }
 
 // GetSession handles GET /v1/events/{eventId}/sessions/{sessionId},
@@ -228,7 +272,7 @@ func (h *SessionHandler) PatchSession(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.service.UpdateSession(r.Context(), actor.ID, eventID, sessionID, req.Version, req.ToPatch(loc))
 	if err != nil {
-		h.writeUpdateOrDeleteError(w, "session: updating", eventID, sessionID, err)
+		h.writeUpdateOrDeleteError(w, r.Context(), loc, "session: updating", eventID, sessionID, err)
 		return
 	}
 
@@ -237,10 +281,10 @@ func (h *SessionHandler) PatchSession(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSession handles DELETE
 // /v1/events/{eventId}/sessions/{sessionId}?version=N, mounted behind
-// Authz(session, delete). version is a required query parameter, matching
-// DeleteRoom/DeleteEvent's interim convention pending item 17's If-Match
-// design. This is a soft delete (session.Repository.Delete), matching
-// events, not rooms.
+// Authz(session, delete). version is a required query parameter -- item 17
+// kept this design permanently rather than retrofitting ETag/If-Match; see
+// event.go's DeleteEvent comment. This is a soft delete
+// (session.Repository.Delete), matching events, not rooms.
 func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	actor, ok := middleware.UserFromContext(r.Context())
 	if !ok {
@@ -257,6 +301,12 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, loc, err := h.eventTimezone(r.Context(), eventID)
+	if err != nil {
+		h.writeEventLookupError(w, "session: deleting", eventID, err)
+		return
+	}
+
 	raw := r.URL.Query().Get("version")
 	version, err := strconv.Atoi(raw)
 	if raw == "" || err != nil || version <= 0 {
@@ -265,7 +315,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.service.DeleteSession(r.Context(), actor.ID, eventID, sessionID, version); err != nil {
-		h.writeUpdateOrDeleteError(w, "session: deleting", eventID, sessionID, err)
+		h.writeUpdateOrDeleteError(w, r.Context(), loc, "session: deleting", eventID, sessionID, err)
 		return
 	}
 
@@ -285,13 +335,17 @@ func (h *SessionHandler) writeEventLookupError(w http.ResponseWriter, logMsg, ev
 }
 
 // writeCreateOrUpdateError maps CreateSession's error vocabulary:
-// session.ErrInvalidRoom/ErrInvalidSpeaker are create-only.
+// session.ErrInvalidRoom/ErrInvalidSpeaker are create-only. ErrConflict
+// (item 16) means the room or speaker is already booked for an overlapping
+// time_range -- sessions_room_no_overlap_excl / sessions_speaker_no_overlap_excl.
 func (h *SessionHandler) writeCreateOrUpdateError(w http.ResponseWriter, logMsg, eventID string, err error) {
 	switch {
 	case errors.Is(err, session.ErrInvalidRoom):
 		h.writeError(w, http.StatusNotFound, "room_not_found", "room_id must reference an existing room within this event")
 	case errors.Is(err, session.ErrInvalidSpeaker):
 		h.writeError(w, http.StatusNotFound, "speaker_not_found", "speaker_id must reference an existing user")
+	case errors.Is(err, domain.ErrConflict):
+		h.writeError(w, http.StatusConflict, "session_conflict", "that room or speaker is already booked for an overlapping time")
 	default:
 		h.logger.Error(logMsg, "event_id", eventID, "error", err)
 		h.writeInternalError(w)
@@ -310,13 +364,26 @@ func (h *SessionHandler) writeNotFoundOrInternal(w http.ResponseWriter, logMsg, 
 }
 
 // writeUpdateOrDeleteError maps PatchSession/DeleteSession's shared
-// vocabulary.
-func (h *SessionHandler) writeUpdateOrDeleteError(w http.ResponseWriter, logMsg, eventID, sessionID string, err error) {
+// vocabulary. ErrVersionMismatch (item 17) embeds the session's current
+// state under details.current, same as event.go/room.go's equivalent.
+func (h *SessionHandler) writeUpdateOrDeleteError(w http.ResponseWriter, ctx context.Context, loc *time.Location, logMsg, eventID, sessionID string, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		h.writeError(w, http.StatusNotFound, "not_found", "no such session")
 	case errors.Is(err, domain.ErrVersionMismatch):
-		h.writeError(w, http.StatusConflict, "version_conflict", "the session was modified by someone else; reload and retry")
+		details := map[string]any{"current": nil}
+		switch current, getErr := h.service.GetSession(ctx, eventID, sessionID); {
+		case getErr == nil:
+			details["current"] = response.NewSessionResponse(current, loc)
+		case errors.Is(getErr, domain.ErrNotFound):
+			// Winning writer deleted the session between the failed write
+			// and this re-fetch -- expected, not a bug. Stays explicitly null.
+		default:
+			h.logger.Error("session: fetching current state after version conflict", "event_id", eventID, "session_id", sessionID, "error", getErr)
+		}
+		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the session was modified by someone else; reload and retry", details); writeErr != nil {
+			h.logger.Error("session: writing error envelope", "error", writeErr)
+		}
 	default:
 		h.logger.Error(logMsg, "event_id", eventID, "session_id", sessionID, "error", err)
 		h.writeInternalError(w)

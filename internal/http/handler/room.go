@@ -167,7 +167,7 @@ func (h *RoomHandler) PatchRoom(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.service.UpdateRoom(r.Context(), actor.ID, eventID, roomID, req.Version, req.ToPatch())
 	if err != nil {
-		h.writeUpdateOrDeleteError(w, "room: updating", eventID, roomID, err, "room_name_taken", "another room in this event already has that name")
+		h.writeUpdateOrDeleteError(w, r.Context(), "room: updating", eventID, roomID, err, "room_name_taken", "another room in this event already has that name")
 		return
 	}
 
@@ -176,8 +176,9 @@ func (h *RoomHandler) PatchRoom(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRoom handles DELETE /v1/events/{eventId}/rooms/{roomId}?version=N,
 // mounted behind Authz(room, delete). version is a required query
-// parameter, matching DeleteEvent/RemoveMember's interim convention
-// pending item 17's If-Match design.
+// parameter -- item 17 kept this design (query-param on DELETE, body on
+// PATCH) permanently rather than retrofitting ETag/If-Match; see event.go's
+// DeleteEvent comment.
 func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	actor, ok := middleware.UserFromContext(r.Context())
 	if !ok {
@@ -202,7 +203,7 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.DeleteRoom(r.Context(), actor.ID, eventID, roomID, version); err != nil {
-		h.writeUpdateOrDeleteError(w, "room: deleting", eventID, roomID, err, "room_in_use", "this room has sessions; remove them before deleting the room")
+		h.writeUpdateOrDeleteError(w, r.Context(), "room: deleting", eventID, roomID, err, "room_in_use", "this room has sessions; remove them before deleting the room")
 		return
 	}
 
@@ -234,13 +235,27 @@ func (h *RoomHandler) writeNotFoundOrInternal(w http.ResponseWriter, logMsg, eve
 // writeUpdateOrDeleteError maps PatchRoom/DeleteRoom's shared vocabulary.
 // ErrConflict's meaning differs by call site -- a rename collision for
 // PatchRoom, the sessions-FK guard for DeleteRoom -- so the caller supplies
-// the code and message for that case.
-func (h *RoomHandler) writeUpdateOrDeleteError(w http.ResponseWriter, logMsg, eventID, roomID string, err error, conflictCode, conflictMessage string) {
+// the code and message for that case. ErrVersionMismatch (item 17) embeds
+// the room's current state under details.current, same as event.go's
+// writeDomainError.
+func (h *RoomHandler) writeUpdateOrDeleteError(w http.ResponseWriter, ctx context.Context, logMsg, eventID, roomID string, err error, conflictCode, conflictMessage string) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		h.writeError(w, http.StatusNotFound, "not_found", "no such room")
 	case errors.Is(err, domain.ErrVersionMismatch):
-		h.writeError(w, http.StatusConflict, "version_conflict", "the room was modified by someone else; reload and retry")
+		details := map[string]any{"current": nil}
+		switch current, getErr := h.service.GetRoom(ctx, eventID, roomID); {
+		case getErr == nil:
+			details["current"] = response.NewRoomResponse(current)
+		case errors.Is(getErr, domain.ErrNotFound):
+			// Winning writer deleted the room between the failed write and
+			// this re-fetch -- expected, not a bug. Stays explicitly null.
+		default:
+			h.logger.Error("room: fetching current state after version conflict", "event_id", eventID, "room_id", roomID, "error", getErr)
+		}
+		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the room was modified by someone else; reload and retry", details); writeErr != nil {
+			h.logger.Error("room: writing error envelope", "error", writeErr)
+		}
 	case errors.Is(err, domain.ErrConflict):
 		h.writeError(w, http.StatusConflict, conflictCode, conflictMessage)
 	default:

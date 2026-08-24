@@ -46,6 +46,10 @@ type fakeSessionService struct {
 	deleteOut    session.Session
 	deleteErr    error
 	deleteCalled bool
+
+	seriesOut   session.Series
+	seriesItems []session.SeriesOccurrenceResult
+	seriesErr   error
 }
 
 func (f *fakeSessionService) CreateSession(ctx context.Context, actorID, eventID string, in session.CreateInput) (session.Session, error) {
@@ -64,6 +68,9 @@ func (f *fakeSessionService) UpdateSession(ctx context.Context, actorID, eventID
 func (f *fakeSessionService) DeleteSession(ctx context.Context, actorID, eventID, sessionID string, version int) (session.Session, error) {
 	f.deleteCalled = true
 	return f.deleteOut, f.deleteErr
+}
+func (f *fakeSessionService) CreateSeries(ctx context.Context, actorID, eventID string, in session.SeriesCreateInput) (session.Series, []session.SeriesOccurrenceResult, error) {
+	return f.seriesOut, f.seriesItems, f.seriesErr
 }
 
 func validCreateSessionBody() string {
@@ -90,6 +97,75 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 	if got["id"] != "session-1" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func validCreateSeriesBody() string {
+	return `{"room_id":"room-1","speaker_id":"speaker-1","title":"Standup","first_starts_at":"2026-06-15T09:00:00","first_ends_at":"2026-06-15T09:30:00","freq":"daily","interval_count":1,"occurrences":5}`
+}
+
+func TestCreateSeries_Success(t *testing.T) {
+	events := &fakeEventGetter{getOut: newYorkEvent("evt-1")}
+	sessionID := "session-1"
+	sessions := &fakeSessionService{
+		seriesOut:   session.Series{ID: "series-1", Occurrences: 5},
+		seriesItems: []session.SeriesOccurrenceResult{{Status: "created", SessionID: &sessionID}},
+	}
+	h := handler.NewSessionHandler(sessions, events, discardLogger())
+
+	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/sessions/series", strings.NewReader(validCreateSeriesBody())))
+	req.SetPathValue("eventId", "evt-1")
+	rec := httptest.NewRecorder()
+
+	h.CreateSeries(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got status %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decoding response body: %v", err)
+	}
+	if got["id"] != "series-1" {
+		t.Fatalf("got %v", got)
+	}
+	occurrences, ok := got["occurrences"].([]any)
+	if !ok || len(occurrences) != 1 {
+		t.Fatalf("got occurrences %v, want 1 item", got["occurrences"])
+	}
+}
+
+func TestCreateSeries_InvalidFreq_Returns422(t *testing.T) {
+	events := &fakeEventGetter{getOut: newYorkEvent("evt-1")}
+	sessions := &fakeSessionService{}
+	h := handler.NewSessionHandler(sessions, events, discardLogger())
+
+	body := `{"room_id":"room-1","speaker_id":"speaker-1","title":"Standup","first_starts_at":"2026-06-15T09:00:00","first_ends_at":"2026-06-15T09:30:00","freq":"monthly","interval_count":1,"occurrences":5}`
+	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/sessions/series", strings.NewReader(body)))
+	req.SetPathValue("eventId", "evt-1")
+	rec := httptest.NewRecorder()
+
+	h.CreateSeries(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got status %d, want 422: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateSeries_OccurrencesOutOfRange_Returns422(t *testing.T) {
+	events := &fakeEventGetter{getOut: newYorkEvent("evt-1")}
+	sessions := &fakeSessionService{}
+	h := handler.NewSessionHandler(sessions, events, discardLogger())
+
+	body := `{"room_id":"room-1","speaker_id":"speaker-1","title":"Standup","first_starts_at":"2026-06-15T09:00:00","first_ends_at":"2026-06-15T09:30:00","freq":"daily","interval_count":1,"occurrences":53}`
+	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/sessions/series", strings.NewReader(body)))
+	req.SetPathValue("eventId", "evt-1")
+	rec := httptest.NewRecorder()
+
+	h.CreateSeries(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got status %d, want 422: %s", rec.Code, rec.Body.String())
 	}
 }
 

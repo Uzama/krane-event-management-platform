@@ -155,6 +155,26 @@ func TestPatchRoomRequest_Validate_RejectsBlankName(t *testing.T) {
 	}
 }
 
+// TestPatchRoomRequest_Validate_RejectsExplicitNullForName is item 20's
+// missing coverage: the existing RejectsBlankName test only sent
+// whitespace ("   "), never a literal JSON null -- which
+// opt.Optional[string] accepts silently as Set=true, Value="" -- so this
+// proves that path is actually caught, not merely assumed from reading
+// the code.
+func TestPatchRoomRequest_Validate_RejectsExplicitNullForName(t *testing.T) {
+	var r request.PatchRoomRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "name": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.Name.Set {
+		t.Fatalf("Name.Set = false, want true (opt.Optional[string] treats null as Set=true, Value=\"\")")
+	}
+	issues := r.Validate()
+	if _, ok := issues["name"]; !ok {
+		t.Fatalf("issues missing name: %v -- explicit null must be rejected, not silently applied as a blank name", issues)
+	}
+}
+
 func TestPatchRoomRequest_ToPatch(t *testing.T) {
 	var r request.PatchRoomRequest
 	if err := json.Unmarshal([]byte(`{"version": 3, "name": "New name"}`), &r); err != nil {

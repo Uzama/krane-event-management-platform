@@ -159,8 +159,10 @@ paths:
       operationId: deleteEvent
       summary: Delete (soft-delete) an event
       description: >
-        version is required as a query parameter -- there is no ETag/If-Match
-        middleware yet; this is the interim mechanism for events alone.
+        version is required as a query parameter. This is the permanent
+        mechanism (item 17), not an ETag/If-Match interim -- uniform across
+        events/rooms/sessions (query parameter on delete, body field on
+        patch) and event_members.
       security:
         - bearerAuth: []
       parameters:
@@ -322,8 +324,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: >
-            The member's version no longer matches (version_conflict), or
-            this change would leave the event with zero admins (last_admin).
+            The member's version no longer matches (version_conflict) --
+            error.details.current carries the member's fresh state, shaped
+            by the same role-aware presenter GET uses (never a raw row);
+            null if the member was removed by the write that won the race
+            -- or this change would leave the event with zero admins
+            (last_admin, no details.current).
           content:
             application/json:
               schema:
@@ -334,8 +340,8 @@ paths:
       operationId: removeMember
       summary: Remove a member from an event
       description: >
-        version is required as a query parameter, matching DELETE
-        /v1/events/{eventId}'s interim convention. Rejected with 409
+        version is required as a query parameter -- the permanent
+        mechanism (item 17), not an interim one. Rejected with 409
         last_admin if it would leave the event with zero admins.
       security:
         - bearerAuth: []
@@ -357,9 +363,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: >
-            The member's version no longer matches (version_conflict), or
-            removing them would leave the event with zero admins
-            (last_admin).
+            The member's version no longer matches (version_conflict) --
+            error.details.current carries the member's fresh state, shaped
+            by the same role-aware presenter GET uses; null if already
+            removed by the write that won the race -- or removing them
+            would leave the event with zero admins (last_admin, no
+            details.current).
           content:
             application/json:
               schema:
@@ -517,9 +526,11 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: >
-            The room's version no longer matches (version_conflict), or
-            another room in this event already has the new name
-            (room_name_taken).
+            The room's version no longer matches (version_conflict) --
+            error.details.current carries the room's fresh state (the same
+            shape GET returns); null if deleted by the write that won the
+            race -- or another room in this event already has the new name
+            (room_name_taken, no details.current).
           content:
             application/json:
               schema:
@@ -531,10 +542,10 @@ paths:
       summary: Delete a room
       description: >
         A real hard delete -- rooms has no deleted_at column. version is
-        required as a query parameter, matching DELETE
-        /v1/events/{eventId}'s interim convention. Rejected with 409
-        room_in_use if the room still has sessions referencing it; there
-        is no cascade -- remove or reassign them first.
+        required as a query parameter -- the permanent mechanism (item 17),
+        not an interim one. Rejected with 409 room_in_use if the room
+        still has sessions referencing it; there is no cascade -- remove
+        or reassign them first.
       security:
         - bearerAuth: []
       parameters:
@@ -555,8 +566,10 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: >
-            The room's version no longer matches (version_conflict), or it
-            still has sessions referencing it (room_in_use).
+            The room's version no longer matches (version_conflict) --
+            error.details.current carries the room's fresh state; null if
+            already deleted by the write that won the race -- or it still
+            has sessions referencing it (room_in_use, no details.current).
           content:
             application/json:
               schema:
@@ -667,6 +680,57 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/sessions/series:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createSessionSeries
+      summary: Create a recurring series of sessions
+      description: >
+        Item 23 (go-further pick), deliberately scoped small -- see
+        TRADEOFFS.md for what was cut (lazy materialize-on-read, RRULE
+        shapes beyond daily/weekly). Every occurrence is materialized
+        immediately as an ordinary session, through the exact same write
+        POST .../sessions uses -- each is independently subject to the
+        room/speaker EXCLUDE (item 16), so a conflict on one occurrence is
+        a per-item "conflict" result, not a whole-series failure. Editing
+        or cancelling one occurrence afterward is a normal PATCH/DELETE on
+        that session; it is recorded in a history table, but the session
+        itself is never distinguished from a standalone one by any other
+        route.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeriesCreateRequest"
+      responses:
+        "201":
+          description: The series and every occurrence's result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Series"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: room_id doesn't reference a room in this event, or speaker_id doesn't reference an existing user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /v1/events/{eventId}/sessions/{sessionId}:
     parameters:
       - name: eventId
@@ -733,7 +797,11 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: The session's version no longer matches (version_conflict).
+          description: >
+            The session's version no longer matches (version_conflict) --
+            error.details.current carries the session's fresh state (the
+            same shape GET returns); null if deleted by the write that won
+            the race.
           content:
             application/json:
               schema:
@@ -747,8 +815,7 @@ paths:
         A soft delete (sessions.deleted_at set) -- matching events, not
         rooms: docs/requirements.md D9 says cancelling a session frees its
         room and speaker slot immediately. version is required as a query
-        parameter, matching DELETE /v1/events/{eventId}'s interim
-        convention.
+        parameter -- the permanent mechanism (item 17), not an interim one.
       security:
         - bearerAuth: []
       parameters:
@@ -768,7 +835,10 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: The session's version no longer matches (version_conflict).
+          description: >
+            The session's version no longer matches (version_conflict) --
+            error.details.current carries the session's fresh state; null
+            if already deleted by the write that won the race.
           content:
             application/json:
               schema:
@@ -878,6 +948,66 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/invitations/bulk:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: bulkCreateInvitations
+      summary: Invite several people to an event, idempotently
+      description: >
+        Item 21. Requires an Idempotency-Key header. Each item is invited
+        through the exact same escalation-guarded, audited write as POST
+        .../invitations, one at a time -- a partial failure (one email
+        already invited, one role the caller can't grant) never fails the
+        whole batch; every item gets its own result in the 207 body. A
+        retry with the same Idempotency-Key and an identical body replays
+        the stored result verbatim, never reprocessing the items or
+        re-checking current state (so a result stays "created" even if the
+        caller's own role has since changed). A retry with the same key
+        but a different body is rejected outright (422
+        idempotency_key_conflict) -- never silently replayed, never
+        silently reprocessed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkInviteRequest"
+      responses:
+        "207":
+          description: Per-item results -- see BulkInviteResponse. Always 207, even when every item succeeded or every item failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkInviteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >
+            Either the request body failed shape validation (missing
+            Idempotency-Key, empty invitations list, a malformed item), or
+            this Idempotency-Key was already used with a different request
+            body (idempotency_key_conflict).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -907,7 +1037,12 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     Conflict:
-      description: The event's version no longer matches (lost-update protection).
+      description: >
+        The event's version no longer matches (lost-update protection,
+        item 17). error.details.current carries the event's fresh state
+        (the same shape GET returns), so the caller can retry immediately
+        with the current version instead of a second round trip. null if
+        the event was deleted by the write that won the race.
       content:
         application/json:
           schema:
@@ -1310,6 +1445,17 @@ components:
         updated_at:
           type: string
           format: date-time
+        room_name:
+          type: string
+          description: >
+            Present only on GET (list) rows (item 18) -- batched via a
+            single JOIN so query count stays constant regardless of page
+            size, never a per-row lookup. Absent (not null) on create/get
+            single/update responses and on a version-conflict's
+            details.current.
+        speaker_name:
+          type: string
+          description: Present only on GET (list) rows -- see room_name.
 
     SessionList:
       type: object
@@ -1365,6 +1511,113 @@ components:
         ends_at:
           type: string
           description: Same format as starts_at. Must resolve to an instant after starts_at.
+
+    # internal/http/request/session.go's SeriesCreateRequest (item 23).
+    SeriesCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - room_id
+        - speaker_id
+        - title
+        - first_starts_at
+        - first_ends_at
+        - freq
+        - interval_count
+        - occurrences
+      properties:
+        room_id:
+          type: string
+          format: uuid
+        speaker_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        first_starts_at:
+          type: string
+          description: The first occurrence's local wall-clock start -- same format as SessionCreateRequest.starts_at.
+        first_ends_at:
+          type: string
+          description: The first occurrence's local wall-clock end. Every later occurrence keeps this same duration.
+        freq:
+          type: string
+          enum: [daily, weekly]
+        interval_count:
+          type: integer
+          minimum: 1
+          description: e.g. freq=weekly, interval_count=2 -> every other week.
+        occurrences:
+          type: integer
+          minimum: 1
+          maximum: 52
+
+    SeriesOccurrenceResult:
+      type: object
+      additionalProperties: false
+      required:
+        - starts_at
+        - status
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [created, conflict]
+          description: conflict means item 16's EXCLUDE rejected this occurrence -- the room or speaker was already booked at that instant. This occurrence is simply not materialized; the rest of the series is unaffected.
+        session_id:
+          type: string
+          format: uuid
+          description: Present only when status is "created".
+
+    Series:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - event_id
+        - room_id
+        - speaker_id
+        - title
+        - description
+        - freq
+        - interval_count
+        - occurrences
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        speaker_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        freq:
+          type: string
+          enum: [daily, weekly]
+        interval_count:
+          type: integer
+        occurrences:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeriesOccurrenceResult"
+        created_at:
+          type: string
+          format: date-time
 
     # internal/http/request/session.go's PatchSessionRequest. room_id/
     # speaker_id are deliberately absent from this schema, not merely
@@ -1469,3 +1722,45 @@ components:
         role:
           type: string
           enum: [admin, contributor, attendee]
+
+    # internal/http/request/invitation.go's BulkInviteRequest.
+    BulkInviteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - invitations
+      properties:
+        invitations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/InvitationCreateRequest"
+
+    BulkInviteItemResult:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - status
+      properties:
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [created, conflict, forbidden]
+        invitation_id:
+          type: string
+          format: uuid
+          description: Present only when status is "created".
+
+    BulkInviteResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkInviteItemResult"

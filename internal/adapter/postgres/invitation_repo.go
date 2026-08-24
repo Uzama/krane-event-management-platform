@@ -155,3 +155,122 @@ func (r *InvitationRepository) List(ctx context.Context, eventID string, limit i
 	}
 	return page, nil
 }
+
+// bulkInviteEndpoint is the fixed idempotency_keys.endpoint value for
+// BulkCreate -- there is exactly one caller of this method, so this never
+// needs to be a parameter.
+const bulkInviteEndpoint = "POST /v1/events/{eventId}/invitations/bulk"
+
+// BulkCreate implements item 21. See invitation.Repository.BulkCreate's
+// doc comment for the full contract; this is the mechanics.
+//
+// A first call for (actorID, idempotencyKey) processes items one by one,
+// EACH through Create -- the exact same atomic, escalation-guarded,
+// audited single-invite write item 13 shipped, called in a loop, never a
+// raw multi-row INSERT that would bypass the per-item guard (item 13's own
+// forward-note to this item). Every successful item therefore gets its own
+// audit_log row, written inside Create's own transaction, exactly like a
+// single invite -- there is no batch-level audit row.
+//
+// The result is recorded with INSERT ... ON CONFLICT (actor_id, key) DO
+// NOTHING RETURNING id: if this call wins the race, its own freshly
+// computed result is authoritative. If it loses (a concurrent call for the
+// same key committed first), the winner's stored result is read back and
+// returned instead -- never this call's own local results, which may
+// differ per-item from the winner's since both processed the same items
+// concurrently and Postgres's own invitations_event_id_email_key unique
+// constraint decides, per email, which caller's Create actually won that
+// row. This still satisfies "never double-send": the constraint means at
+// most one invitation row ever exists per (event, email) regardless of
+// which caller's local view ends up unreported.
+//
+// A retry (the key already has a row before this call ever begins
+// processing) either replays that row verbatim -- decoded from
+// response_body, never recomputed against current state -- if
+// requestHash matches, or returns domain.ErrConflict if it doesn't (the
+// key was reused for a different request).
+func (r *InvitationRepository) BulkCreate(ctx context.Context, actorID, eventID, idempotencyKey, requestHash string, items []invitation.CreateInput) (invitation.BulkResult, error) {
+	if existing, found, err := r.loadIdempotencyResult(ctx, actorID, idempotencyKey, requestHash); err != nil {
+		return invitation.BulkResult{}, err
+	} else if found {
+		existing.Replayed = true
+		return existing, nil
+	}
+
+	results := make([]invitation.BulkItemResult, len(items))
+	for i, item := range items {
+		created, err := r.Create(ctx, actorID, eventID, item)
+		switch {
+		case err == nil:
+			id := created.ID
+			results[i] = invitation.BulkItemResult{Email: item.Email, Status: "created", InvitationID: &id}
+		case errors.Is(err, domain.ErrConflict):
+			results[i] = invitation.BulkItemResult{Email: item.Email, Status: "conflict"}
+		case errors.Is(err, domain.ErrForbidden):
+			results[i] = invitation.BulkItemResult{Email: item.Email, Status: "forbidden"}
+		default:
+			return invitation.BulkResult{}, fmt.Errorf("bulk-inviting %q: %w", item.Email, err)
+		}
+	}
+
+	responseBody, err := json.Marshal(results)
+	if err != nil {
+		return invitation.BulkResult{}, fmt.Errorf("marshaling bulk invite result: %w", err)
+	}
+
+	const insertKey = `
+		INSERT INTO idempotency_keys (actor_id, key, endpoint, request_hash, response_status, response_body)
+		VALUES ($1, $2, $3, $4, 207, $5)
+		ON CONFLICT (actor_id, key) DO NOTHING
+		RETURNING id`
+	var idempotencyRowID string
+	err = r.pool.QueryRow(ctx, insertKey, actorID, idempotencyKey, bulkInviteEndpoint, requestHash, responseBody).Scan(&idempotencyRowID)
+	if err == nil {
+		return invitation.BulkResult{Items: results}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return invitation.BulkResult{}, fmt.Errorf("recording bulk invite idempotency key: %w", err)
+	}
+
+	// Lost the race: another call for this exact key committed its result
+	// first, between this call's initial loadIdempotencyResult (which
+	// found nothing) and this INSERT. Read back and return the winner's
+	// stored result rather than this call's own.
+	winner, found, err := r.loadIdempotencyResult(ctx, actorID, idempotencyKey, requestHash)
+	if err != nil {
+		return invitation.BulkResult{}, err
+	}
+	if !found {
+		return invitation.BulkResult{}, fmt.Errorf("bulk invite idempotency key vanished after a lost race")
+	}
+	winner.Replayed = true
+	return winner, nil
+}
+
+// loadIdempotencyResult looks up an existing idempotency_keys row for
+// (actorID, key). found is false when no such row exists yet -- a
+// genuinely first call. When a row exists, its request_hash is compared
+// against requestHash: a match decodes and returns the stored result; a
+// mismatch returns domain.ErrConflict (a key reused for a different
+// request), never silently replaying or reprocessing.
+func (r *InvitationRepository) loadIdempotencyResult(ctx context.Context, actorID, key, requestHash string) (invitation.BulkResult, bool, error) {
+	const q = `SELECT request_hash, response_body FROM idempotency_keys WHERE actor_id = $1 AND key = $2`
+	var storedHash string
+	var responseBody []byte
+	err := r.pool.QueryRow(ctx, q, actorID, key).Scan(&storedHash, &responseBody)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return invitation.BulkResult{}, false, nil
+		}
+		return invitation.BulkResult{}, false, fmt.Errorf("looking up idempotency key: %w", err)
+	}
+	if storedHash != requestHash {
+		return invitation.BulkResult{}, false, domain.ErrConflict
+	}
+
+	var items []invitation.BulkItemResult
+	if err := json.Unmarshal(responseBody, &items); err != nil {
+		return invitation.BulkResult{}, false, fmt.Errorf("decoding stored bulk invite result: %w", err)
+	}
+	return invitation.BulkResult{Items: items}, true, nil
+}

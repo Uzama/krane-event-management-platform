@@ -224,6 +224,46 @@ func TestPatchSessionRequest_Validate_RejectsBlankTitle(t *testing.T) {
 	}
 }
 
+// TestPatchSessionRequest_Validate_RejectsExplicitNullForTitle is item
+// 20's missing coverage: the existing RejectsBlankTitle test only sent
+// whitespace ("   "), never a literal JSON null -- which
+// opt.Optional[string] accepts silently as Set=true, Value="" -- so this
+// proves that path is actually caught, not merely assumed.
+func TestPatchSessionRequest_Validate_RejectsExplicitNullForTitle(t *testing.T) {
+	var r request.PatchSessionRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "title": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.Title.Set {
+		t.Fatalf("Title.Set = false, want true (opt.Optional[string] treats null as Set=true, Value=\"\")")
+	}
+	issues := r.Validate(newYorkLoc(t))
+	if _, ok := issues["title"]; !ok {
+		t.Fatalf("issues missing title: %v -- explicit null must be rejected, not silently applied as a blank title", issues)
+	}
+}
+
+// TestPatchSessionRequest_Validate_RejectsExplicitNullForBothStartsAndEnds
+// is item 20's missing coverage: unlike event.Patch, session's
+// StartsAt/EndsAt are opt.Optional[string] (local wall-clock strings,
+// item 12), so a literal JSON null lands as Set=true, Value="" -- caught
+// here via utils.ResolveLocalTime("", loc) failing to parse, not a
+// TrimSpace check, so this is a genuinely different code path from
+// Title's and needs its own proof.
+func TestPatchSessionRequest_Validate_RejectsExplicitNullForBothStartsAndEnds(t *testing.T) {
+	var r request.PatchSessionRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "starts_at": null, "ends_at": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.StartsAt.Set || !r.EndsAt.Set {
+		t.Fatalf("got StartsAt.Set=%v EndsAt.Set=%v, want both true", r.StartsAt.Set, r.EndsAt.Set)
+	}
+	issues := r.Validate(newYorkLoc(t))
+	if len(issues) == 0 {
+		t.Fatal("got no issues, want a starts_at/ends_at parse error -- null-for-both must not be silently accepted")
+	}
+}
+
 func TestPatchSessionRequest_ToPatch(t *testing.T) {
 	var r request.PatchSessionRequest
 	body := `{"version": 3, "title": "New title", "starts_at": "2026-06-15T09:00:00", "ends_at": "2026-06-15T10:00:00"}`

@@ -41,6 +41,13 @@ type fakeRepo struct {
 	deleteVer     int
 	deleteOut     session.Session
 	deleteErr     error
+
+	seriesActor string
+	seriesEvent string
+	seriesIn    session.SeriesCreateInput
+	seriesOut   session.Series
+	seriesItems []session.SeriesOccurrenceResult
+	seriesErr   error
 }
 
 func (f *fakeRepo) Create(ctx context.Context, actorID, eventID string, in session.CreateInput) (session.Session, error) {
@@ -66,6 +73,11 @@ func (f *fakeRepo) Update(ctx context.Context, actorID, eventID, sessionID strin
 func (f *fakeRepo) Delete(ctx context.Context, actorID, eventID, sessionID string, version int) (session.Session, error) {
 	f.deleteActor, f.deleteEvent, f.deleteSession, f.deleteVer = actorID, eventID, sessionID, version
 	return f.deleteOut, f.deleteErr
+}
+
+func (f *fakeRepo) CreateSeries(ctx context.Context, actorID, eventID string, in session.SeriesCreateInput) (session.Series, []session.SeriesOccurrenceResult, error) {
+	f.seriesActor, f.seriesEvent, f.seriesIn = actorID, eventID, in
+	return f.seriesOut, f.seriesItems, f.seriesErr
 }
 
 func TestService_CreateSession_PassesThroughToRepository(t *testing.T) {
@@ -176,6 +188,37 @@ func TestService_DeleteSession_PropagatesConflict(t *testing.T) {
 	svc := session.NewService(repo)
 
 	_, err := svc.DeleteSession(context.Background(), "actor-1", "event-1", "session-5", 1)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("got err %v, want %v", err, wantErr)
+	}
+}
+
+func TestService_CreateSeries_PassesThroughToRepository(t *testing.T) {
+	repo := &fakeRepo{
+		seriesOut:   session.Series{ID: "series-1"},
+		seriesItems: []session.SeriesOccurrenceResult{{Status: "created"}},
+	}
+	svc := session.NewService(repo)
+
+	in := session.SeriesCreateInput{Title: "Standup", Freq: "daily", IntervalCount: 1, Occurrences: 5}
+	series, items, err := svc.CreateSeries(context.Background(), "actor-1", "event-1", in)
+	if err != nil {
+		t.Fatalf("CreateSeries: %v", err)
+	}
+	if series.ID != "series-1" || len(items) != 1 {
+		t.Fatalf("got series=%+v items=%+v", series, items)
+	}
+	if repo.seriesActor != "actor-1" || repo.seriesEvent != "event-1" || repo.seriesIn.Title != "Standup" {
+		t.Fatalf("repo.CreateSeries called with wrong args: actor=%q event=%q in=%+v", repo.seriesActor, repo.seriesEvent, repo.seriesIn)
+	}
+}
+
+func TestService_CreateSeries_PropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("boom")
+	repo := &fakeRepo{seriesErr: wantErr}
+	svc := session.NewService(repo)
+
+	_, _, err := svc.CreateSeries(context.Background(), "actor-1", "event-1", session.SeriesCreateInput{})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("got err %v, want %v", err, wantErr)
 	}

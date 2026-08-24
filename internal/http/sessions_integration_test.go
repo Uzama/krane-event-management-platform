@@ -702,3 +702,44 @@ func assertFallBackResult(t *testing.T, startsAt, endsAt string, durationMinutes
 		t.Errorf("got ends_at offset %ds, want -05:00 (EST, after the transition)", offset)
 	}
 }
+
+// TestSessionsIntegration_CreateSeries_MaterializesOccurrences is item
+// 23's full-stack proof: the real production router, real mock OIDC, real
+// Postgres. Confirms the response contract and that every occurrence
+// really landed as a session reachable through the ordinary GET route.
+func TestSessionsIntegration_CreateSeries_MaterializesOccurrences(t *testing.T) {
+	srv, pool := newSessionsServer(t)
+	spec := loadEventsITSpec(t)
+	eventID, adminToken := createSessionsITEvent(t, srv, "America/New_York")
+	roomID := createSessionsITRoom(t, srv, eventID, adminToken)
+	speakerID := createSessionsITSpeaker(t, pool)
+
+	body := fmt.Sprintf(`{"room_id":%q,"speaker_id":%q,"title":"Standup","first_starts_at":"2026-06-15T09:00:00","first_ends_at":"2026-06-15T09:30:00","freq":"daily","interval_count":1,"occurrences":3}`, roomID, speakerID)
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events/" + eventID + "/sessions/series", bearer: adminToken, body: body})
+	if resp.status != http.StatusCreated {
+		t.Fatalf("got status %d, want 201: %s", resp.status, resp.body)
+	}
+	assertSpec(t, spec, http.MethodPost, "/v1/events/"+eventID+"/sessions/series", body, resp.status, resp.header, resp.body)
+
+	var got struct {
+		Occurrences []struct {
+			Status    string `json:"status"`
+			SessionID string `json:"session_id"`
+		} `json:"occurrences"`
+	}
+	if err := json.Unmarshal(resp.body, &got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(got.Occurrences) != 3 {
+		t.Fatalf("got %d occurrences, want 3: %s", len(got.Occurrences), resp.body)
+	}
+	for i, occ := range got.Occurrences {
+		if occ.Status != "created" || occ.SessionID == "" {
+			t.Fatalf("occurrence %d: got %+v, want status=created with a session_id", i, occ)
+		}
+		getResp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events/" + eventID + "/sessions/" + occ.SessionID, bearer: adminToken})
+		if getResp.status != http.StatusOK {
+			t.Fatalf("occurrence %d: GET got status %d, want 200: %s", i, getResp.status, getResp.body)
+		}
+	}
+}

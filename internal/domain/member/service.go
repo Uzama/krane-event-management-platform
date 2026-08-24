@@ -19,6 +19,10 @@ func (s *Service) CreateMember(ctx context.Context, actorID, eventID string, in 
 	return s.repo.Create(ctx, actorID, eventID, in)
 }
 
+func (s *Service) GetMember(ctx context.Context, eventID, memberID string) (Member, error) {
+	return s.repo.Get(ctx, eventID, memberID)
+}
+
 func (s *Service) ListMembers(ctx context.Context, eventID string, limit int, after *Cursor) (Page, error) {
 	return s.repo.List(ctx, eventID, limit, after)
 }

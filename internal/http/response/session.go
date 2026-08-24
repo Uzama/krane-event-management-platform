@@ -25,6 +25,14 @@ type SessionResponse struct {
 	Version         int       `json:"version"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+
+	// RoomName/SpeakerName (item 18) are populated only when s.RoomName/
+	// s.SpeakerName are non-empty -- true for a List row (batched via a
+	// JOIN, session.Repository.List), never true for Get/Create/Update/a
+	// version-conflict's details.current, so those omit the fields
+	// entirely (omitempty) rather than emit a misleading "".
+	RoomName    *string `json:"room_name,omitempty"`
+	SpeakerName *string `json:"speaker_name,omitempty"`
 }
 
 // NewSessionResponse takes an already-loaded *time.Location, never a
@@ -37,7 +45,7 @@ type SessionResponse struct {
 // across a transition gives the wrong answer, which is exactly the bug
 // FEATURES.md item 12's DST must-test exists to catch.
 func NewSessionResponse(s session.Session, loc *time.Location) SessionResponse {
-	return SessionResponse{
+	resp := SessionResponse{
 		ID:              s.ID,
 		EventID:         s.EventID,
 		RoomID:          s.RoomID,
@@ -50,6 +58,56 @@ func NewSessionResponse(s session.Session, loc *time.Location) SessionResponse {
 		Version:         s.Version,
 		CreatedAt:       s.CreatedAt,
 		UpdatedAt:       s.UpdatedAt,
+	}
+	if s.RoomName != "" {
+		resp.RoomName = &s.RoomName
+	}
+	if s.SpeakerName != "" {
+		resp.SpeakerName = &s.SpeakerName
+	}
+	return resp
+}
+
+// SeriesOccurrenceResponse is one occurrence's outcome in a series create's
+// response (item 23) -- SessionID omitted (never null) unless Status is
+// "created", matching BulkInviteItemResponse's precedent.
+type SeriesOccurrenceResponse struct {
+	StartsAt  time.Time `json:"starts_at"`
+	Status    string    `json:"status"`
+	SessionID *string   `json:"session_id,omitempty"`
+}
+
+// SeriesResponse is POST .../sessions/series' envelope: the series' own
+// row plus every occurrence's result.
+type SeriesResponse struct {
+	ID            string                     `json:"id"`
+	EventID       string                     `json:"event_id"`
+	RoomID        string                     `json:"room_id"`
+	SpeakerID     string                     `json:"speaker_id"`
+	Title         string                     `json:"title"`
+	Description   *string                    `json:"description"`
+	Freq          string                     `json:"freq"`
+	IntervalCount int                        `json:"interval_count"`
+	Occurrences   []SeriesOccurrenceResponse `json:"occurrences"`
+	CreatedAt     time.Time                  `json:"created_at"`
+}
+
+func NewSeriesResponse(series session.Series, results []session.SeriesOccurrenceResult, loc *time.Location) SeriesResponse {
+	occurrences := make([]SeriesOccurrenceResponse, len(results))
+	for i, r := range results {
+		occurrences[i] = SeriesOccurrenceResponse{StartsAt: r.StartsAt.In(loc), Status: r.Status, SessionID: r.SessionID}
+	}
+	return SeriesResponse{
+		ID:            series.ID,
+		EventID:       series.EventID,
+		RoomID:        series.RoomID,
+		SpeakerID:     series.SpeakerID,
+		Title:         series.Title,
+		Description:   series.Description,
+		Freq:          series.Freq,
+		IntervalCount: series.IntervalCount,
+		Occurrences:   occurrences,
+		CreatedAt:     series.CreatedAt,
 	}
 }
 

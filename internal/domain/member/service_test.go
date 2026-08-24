@@ -15,6 +15,10 @@ type fakeRepo struct {
 	createOut                member.Member
 	createErr                error
 
+	getEvent, getMember string
+	getOut              member.Member
+	getErr              error
+
 	listEvent string
 	listLimit int
 	listAfter *member.Cursor
@@ -35,6 +39,11 @@ type fakeRepo struct {
 func (f *fakeRepo) Create(ctx context.Context, actorID, eventID string, in member.CreateInput) (member.Member, error) {
 	f.createActor, f.createEvent, f.createIn = actorID, eventID, in
 	return f.createOut, f.createErr
+}
+
+func (f *fakeRepo) Get(ctx context.Context, eventID, memberID string) (member.Member, error) {
+	f.getEvent, f.getMember = eventID, memberID
+	return f.getOut, f.getErr
 }
 
 func (f *fakeRepo) List(ctx context.Context, eventID string, limit int, after *member.Cursor) (member.Page, error) {

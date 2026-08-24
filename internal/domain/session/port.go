@@ -19,6 +19,13 @@ type CreateInput struct {
 	Description *string
 	StartsAt    time.Time
 	EndsAt      time.Time
+
+	// SeriesID tags this occurrence as belonging to a recurring series
+	// (item 23) -- nil for an ordinary standalone session. Only
+	// CreateSeries ever sets it; the single-session http request DTO never
+	// populates this field, so a client cannot self-assign a session to an
+	// arbitrary series through the regular create endpoint.
+	SeriesID *string
 }
 
 // Patch carries only the fields a PATCH request actually set. RoomID and
@@ -85,4 +92,13 @@ type Repository interface {
 	// speaker slot immediately, which only makes sense against a
 	// soft-delete plus item 16's later partial EXCLUDE constraints.
 	Delete(ctx context.Context, actorID, eventID, sessionID string, version int) (Session, error)
+
+	// CreateSeries materializes in.Occurrences sessions eagerly (item 23),
+	// each through the exact same Create this repository already exposes
+	// -- so each occurrence is independently subject to the room/speaker
+	// EXCLUDE, version-gating, and audit every other session gets, never a
+	// separate scheduling engine. A per-occurrence conflict (item 16) is a
+	// defined per-item result, not a whole-series failure, matching item
+	// 21's BulkCreate precedent.
+	CreateSeries(ctx context.Context, actorID, eventID string, in SeriesCreateInput) (Series, []SeriesOccurrenceResult, error)
 }

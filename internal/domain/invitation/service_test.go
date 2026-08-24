@@ -19,6 +19,11 @@ type fakeRepo struct {
 	listAfter *invitation.Cursor
 	listOut   invitation.Page
 	listErr   error
+
+	bulkActor, bulkEvent, bulkKey, bulkHash string
+	bulkItems                               []invitation.CreateInput
+	bulkOut                                 invitation.BulkResult
+	bulkErr                                 error
 }
 
 func (f *fakeRepo) Create(ctx context.Context, actorID, eventID string, in invitation.CreateInput) (invitation.Invitation, error) {
@@ -29,6 +34,11 @@ func (f *fakeRepo) Create(ctx context.Context, actorID, eventID string, in invit
 func (f *fakeRepo) List(ctx context.Context, eventID string, limit int, after *invitation.Cursor) (invitation.Page, error) {
 	f.listEvent, f.listLimit, f.listAfter = eventID, limit, after
 	return f.listOut, f.listErr
+}
+
+func (f *fakeRepo) BulkCreate(ctx context.Context, actorID, eventID, idempotencyKey, requestHash string, items []invitation.CreateInput) (invitation.BulkResult, error) {
+	f.bulkActor, f.bulkEvent, f.bulkKey, f.bulkHash, f.bulkItems = actorID, eventID, idempotencyKey, requestHash, items
+	return f.bulkOut, f.bulkErr
 }
 
 func TestService_CreateInvitation_PassesThroughToRepository(t *testing.T) {
@@ -73,5 +83,34 @@ func TestService_ListInvitations_PassesThroughArgs(t *testing.T) {
 	}
 	if repo.listEvent != "evt-1" || repo.listLimit != 10 || repo.listAfter != after {
 		t.Fatalf("repo.List called with wrong args: event=%q limit=%d after=%v", repo.listEvent, repo.listLimit, repo.listAfter)
+	}
+}
+
+func TestService_BulkInvite_PassesThroughToRepository(t *testing.T) {
+	items := []invitation.CreateInput{{Email: "a@example.com", Role: "attendee"}}
+	repo := &fakeRepo{bulkOut: invitation.BulkResult{Items: []invitation.BulkItemResult{{Email: "a@example.com", Status: "created"}}}}
+	svc := invitation.NewService(repo)
+
+	got, err := svc.BulkInvite(context.Background(), "actor-1", "evt-1", "key-1", "hash-1", items)
+	if err != nil {
+		t.Fatalf("BulkInvite: %v", err)
+	}
+	if len(got.Items) != 1 || got.Items[0].Status != "created" {
+		t.Fatalf("got %+v", got)
+	}
+	if repo.bulkActor != "actor-1" || repo.bulkEvent != "evt-1" || repo.bulkKey != "key-1" || repo.bulkHash != "hash-1" || len(repo.bulkItems) != 1 {
+		t.Fatalf("repo.BulkCreate called with wrong args: actor=%q event=%q key=%q hash=%q items=%+v",
+			repo.bulkActor, repo.bulkEvent, repo.bulkKey, repo.bulkHash, repo.bulkItems)
+	}
+}
+
+func TestService_BulkInvite_PropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("boom")
+	repo := &fakeRepo{bulkErr: wantErr}
+	svc := invitation.NewService(repo)
+
+	_, err := svc.BulkInvite(context.Background(), "actor-1", "evt-1", "key-1", "hash-1", nil)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("got err %v, want %v", err, wantErr)
 	}
 }

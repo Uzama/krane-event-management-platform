@@ -33,3 +33,44 @@ func (r InvitationCreateRequest) Validate() map[string]any {
 func (r InvitationCreateRequest) ToCreateInput() invitation.CreateInput {
 	return invitation.CreateInput{Email: r.Email, Role: r.Role}
 }
+
+// BulkInviteRequest is POST /v1/events/{eventId}/invitations/bulk's body
+// (item 21). Each item is shape-validated exactly like a single
+// InvitationCreateRequest -- the per-item escalation guard (who may invite
+// at that role) still lives in the repository's atomic write, not here,
+// matching CreateInvitation's own boundary/authorization split.
+type BulkInviteRequest struct {
+	Invitations []InvitationCreateRequest `json:"invitations"`
+}
+
+func (r BulkInviteRequest) Validate() map[string]any {
+	issues := map[string]any{}
+
+	if len(r.Invitations) == 0 {
+		issues["invitations"] = "must contain at least one invitation"
+		return issues
+	}
+
+	perItem := make([]map[string]any, 0, len(r.Invitations))
+	anyIssues := false
+	for _, item := range r.Invitations {
+		itemIssues := item.Validate()
+		if len(itemIssues) > 0 {
+			anyIssues = true
+		}
+		perItem = append(perItem, itemIssues)
+	}
+	if anyIssues {
+		issues["invitations"] = perItem
+	}
+
+	return issues
+}
+
+func (r BulkInviteRequest) ToCreateInputs() []invitation.CreateInput {
+	items := make([]invitation.CreateInput, len(r.Invitations))
+	for i, item := range r.Invitations {
+		items[i] = item.ToCreateInput()
+	}
+	return items
+}

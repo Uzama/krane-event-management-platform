@@ -22,3 +22,7 @@ func (s *Service) CreateInvitation(ctx context.Context, actorID, eventID string,
 func (s *Service) ListInvitations(ctx context.Context, eventID string, limit int, after *Cursor) (Page, error) {
 	return s.repo.List(ctx, eventID, limit, after)
 }
+
+func (s *Service) BulkInvite(ctx context.Context, actorID, eventID, idempotencyKey, requestHash string, items []CreateInput) (BulkResult, error) {
+	return s.repo.BulkCreate(ctx, actorID, eventID, idempotencyKey, requestHash, items)
+}

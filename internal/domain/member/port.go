@@ -41,6 +41,10 @@ type Repository interface {
 	// ErrConflict if actorID is already a member of eventID.
 	Create(ctx context.Context, actorID, eventID string, in CreateInput) (Member, error)
 
+	// Get returns a single member, scoped to both id and eventID. Returns
+	// ErrNotFound if no such membership exists in that event.
+	Get(ctx context.Context, eventID, memberID string) (Member, error)
+
 	// List returns eventID's roster, ordered by (created_at, id), starting
 	// after the given cursor.
 	List(ctx context.Context, eventID string, limit int, after *Cursor) (Page, error)

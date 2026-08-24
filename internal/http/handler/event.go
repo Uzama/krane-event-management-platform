@@ -87,7 +87,7 @@ func (h *EventHandler) GetEvent(w http.ResponseWriter, r *http.Request) {
 
 	got, err := h.service.GetEvent(r.Context(), eventID)
 	if err != nil {
-		h.writeDomainError(w, "event: getting", eventID, err)
+		h.writeDomainError(w, r.Context(), "event: getting", eventID, err)
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *EventHandler) PatchEvent(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.service.UpdateEvent(r.Context(), actor.ID, eventID, req.Version, req.ToPatch())
 	if err != nil {
-		h.writeDomainError(w, "event: updating", eventID, err)
+		h.writeDomainError(w, r.Context(), "event: updating", eventID, err)
 		return
 	}
 
@@ -174,10 +174,12 @@ func (h *EventHandler) PatchEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEvent handles DELETE /v1/events/{eventId}?version=N, mounted behind
-// Authz(event, delete). version is a required query parameter rather than
-// a body -- there is no ETag/If-Match middleware yet (item 17 is expected
-// to introduce one across every versioned resource); this is the interim
-// mechanism for events alone.
+// Authz(event, delete). version is a required query parameter. Item 17
+// resolved the forward-note this comment used to carry -- query-param (here)
+// / body (PatchEvent) version-gating is the permanent design, not an
+// interim one pending an ETag/If-Match retrofit; it is already uniform
+// across events/rooms/sessions/event_members and satisfies FEATURES.md's
+// stated alternative ("...or version in body").
 func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	actor, ok := middleware.UserFromContext(r.Context())
 	if !ok {
@@ -201,21 +203,39 @@ func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.service.DeleteEvent(r.Context(), actor.ID, eventID, version); err != nil {
-		h.writeDomainError(w, "event: deleting", eventID, err)
+		h.writeDomainError(w, r.Context(), "event: deleting", eventID, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *EventHandler) writeDomainError(w http.ResponseWriter, logMsg, eventID string, err error) {
+// writeDomainError maps UpdateEvent/DeleteEvent's shared error vocabulary.
+// ErrVersionMismatch (item 17) embeds the event's current state under
+// details.current -- CLAUDE.md: "0 rows affected -> 409 with the current
+// state" -- so a caller can retry immediately with the fresh version
+// instead of a second round trip. The re-fetch happens after the write has
+// already failed, so it decides nothing the failed write depended on --
+// not a check-then-act.
+func (h *EventHandler) writeDomainError(w http.ResponseWriter, ctx context.Context, logMsg, eventID string, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		if writeErr := response.WriteError(w, http.StatusNotFound, "not_found", "no such event", nil); writeErr != nil {
 			h.logger.Error("event: writing error envelope", "error", writeErr)
 		}
 	case errors.Is(err, domain.ErrVersionMismatch):
-		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the event was modified by someone else; reload and retry", nil); writeErr != nil {
+		details := map[string]any{"current": nil}
+		switch current, getErr := h.service.GetEvent(ctx, eventID); {
+		case getErr == nil:
+			details["current"] = response.NewEventResponse(current)
+		case errors.Is(getErr, domain.ErrNotFound):
+			// The winning writer deleted the event in the gap between the
+			// failed write and this re-fetch -- expected under concurrent
+			// writers, not a bug. details.current stays explicitly null.
+		default:
+			h.logger.Error("event: fetching current state after version conflict", "event_id", eventID, "error", getErr)
+		}
+		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the event was modified by someone else; reload and retry", details); writeErr != nil {
 			h.logger.Error("event: writing error envelope", "error", writeErr)
 		}
 	default:
