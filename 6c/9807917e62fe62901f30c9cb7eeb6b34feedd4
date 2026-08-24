@@ -1,0 +1,65 @@
+internal/http/handler/invitation_test.go
+  s_f76373887302cf::t_9843e1062e7301 42,136-137,139-286
+  s_f76373887302cf::t_4f90c262b18c7b 22-29
+  s_f76373887302cf::t_b4f0f353f1b316 21,38-41
+  s_f76373887302cf::t_3392e886fbe6b5 134-135
+  s_f76373887302cf::t_4128e8067070da 138
+internal/http/events_integration_test.go
+  s_f76373887302cf::t_c647a50a65c47f 161-165
+  s_f76373887302cf::t_78934ba0482c68 194-196
+  s_f76373887302cf::t_137f6dbe40c4e3 248-272
+internal/domain/invitation/service.go
+  s_f76373887302cf::t_d9eb0a117d89d8 25-28
+internal/adapter/postgres/invitation_repo.go
+  s_f76373887302cf::t_4d9d645379cca2 193-198,224,230-244,246-247
+  s_f76373887302cf::t_0408def8b03a7c 158-192,199-223,225-229,245,248-276
+AUDIT.md
+  s_f76373887302cf::t_9ca7f5e953ab04 367-388
+internal/http/router.go
+  s_f76373887302cf::t_e5b20dbbb5683e 118
+internal/http/invitations_integration_test.go
+  s_f76373887302cf::t_d6145a857beaf2 264-284,286,288-290,292-311,314-315,319-340,346-347,349-350,352-367,369-370
+  s_f76373887302cf::t_185bcb060aa985 313,316-318
+  s_f76373887302cf::t_1634b0da3ea1a6 285,287
+  s_f76373887302cf::t_b24d3d59533e41 291
+  s_f76373887302cf::t_2c2846a9b49681 312,341-345,348,351,368
+internal/domain/invitation/port.go
+  s_f76373887302cf::t_47904d8c5e4199 31-51
+  s_f76373887302cf::t_c8e02b49dd56fe 74-88
+internal/domain/invitation/service_test.go
+  s_f76373887302cf::t_1b63cea9a2f341 39-43
+  s_f76373887302cf::t_32813d264cf8c2 22-26
+  s_f76373887302cf::t_50d41f49c3088c 88-116
+FEATURES.md
+  s_f76373887302cf::t_80eeb9d4991eaa 41
+openapi/openapi.yaml
+  s_f76373887302cf::t_784ba6f7d2141e 900-959
+  s_f76373887302cf::t_9366aa455898cd 1567-1608
+internal/http/gen/api.gen.go
+  s_f76373887302cf::t_982efdffe5b91b 22-42,148-169,441-445,494-496,541-543,864-922,1668
+internal/http/request/invitation.go
+  s_f76373887302cf::t_37f608d8801a05 36-76
+internal/http/handler/invitation.go
+  s_f76373887302cf::t_2d705ea008b40a 5-6,9,13,29
+  s_f76373887302cf::t_d7b21ff36cddb6 89-153
+internal/http/response/invitation.go
+  s_f76373887302cf::t_c4c13c0087c849 47-69
+internal/adapter/postgres/invitation_bulk_test.go
+  s_f76373887302cf::t_9b7ce627393eff 1-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "6c9807917e62fe62901f30c9cb7eeb6b34feedd4",
+  "prompts": {},
+  "sessions": {
+    "s_f76373887302cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd3befaf-c6ad-4ab6-88d8-dec1b8de0b55",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
