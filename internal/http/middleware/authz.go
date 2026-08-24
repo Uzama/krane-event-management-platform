@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -36,7 +37,7 @@ func Authz(policy authz.Policy, resource authz.Resource, action authz.Action, lo
 				return
 			}
 
-			allowed, err := policy.Can(r.Context(), actor.ID, eventID, action, resource)
+			allowed, role, err := policy.Can(r.Context(), actor.ID, eventID, action, resource)
 			if err != nil {
 				logger.Error("authz: policy check failed", "actor_id", actor.ID, "event_id", eventID, "resource", resource, "action", action, "error", err)
 				writeInternalError(w, logger)
@@ -48,9 +49,44 @@ func Authz(policy authz.Policy, resource authz.Resource, action authz.Action, lo
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(contextWithRole(r.Context(), role)))
 		})
 	}
+}
+
+type roleContextKey int
+
+const callerRoleContextKey roleContextKey = iota
+
+// contextWithRole attaches the caller's role for the current event, as
+// resolved by policy.Can's own membership lookup -- item 10 (FEATURES.md):
+// http/response presenters read it via RoleFromContext to decide what a
+// body includes. This is the ONLY sanctioned use. A handler branching on
+// this role to gate an action would reintroduce role-in-code authorization
+// through the presenter's back door, bypassing role_permissions -- the
+// chokepoint's allowed boolean already is that decision (FAILURES.md).
+func contextWithRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, callerRoleContextKey, role)
+}
+
+// RoleFromContext returns the caller's role attached by Authz, if any. Only
+// Authz-protected routes carry a role -- Auth-only routes (POST/GET
+// /v1/events) never call this.
+func RoleFromContext(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(callerRoleContextKey).(string)
+	return role, ok
+}
+
+// ContextWithRole attaches role the same way Authz does.
+//
+// TEST SEAM -- NOT FOR PRODUCTION USE. Exported only so handler-level unit
+// tests (a different package, handler_test) can exercise a handler that
+// reads RoleFromContext without running the real Authz chain first, mirroring
+// ContextWithUser's precedent (auth.go). Production code must never call
+// this to attach a role -- role_permissions, via the real Authz check, is
+// the only legitimate source.
+func ContextWithRole(ctx context.Context, role string) context.Context {
+	return contextWithRole(ctx, role)
 }
 
 // writeForbidden never names what exists -- a non-member and a

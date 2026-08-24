@@ -561,10 +561,11 @@ components:
           format: date-time
 
     # internal/http/response/member.go's MemberResponse, field for field.
-    # One flat shape for every role that can reach this route (admin,
-    # contributor) -- attendee has no member:read permission at all, so it
-    # never reaches here. The contributor/email-visibility nuance
-    # (docs/requirements.md §7.2) is item 10's job, not this one's.
+    # user_email is intentionally NOT required -- item 10 / D11
+    # (docs/requirements.md §7.2): it's present only for an admin caller and
+    # omitted entirely (not blanked) for a contributor. Every other field is
+    # shared by every role that can reach this route (admin, contributor --
+    # attendee has no member:read permission at all).
     Member:
       type: object
       additionalProperties: false
@@ -572,7 +573,6 @@ components:
         - id
         - event_id
         - user_id
-        - user_email
         - user_name
         - role
         - version

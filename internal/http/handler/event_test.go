@@ -57,6 +57,12 @@ func withActor(req *http.Request) *http.Request {
 	return req.WithContext(middleware.ContextWithUser(req.Context(), user.User{ID: "actor-1"}))
 }
 
+// withRole attaches a caller role the same way a real Authz check would --
+// member.go's handlers need one for their role-aware presenters (item 10).
+func withRole(req *http.Request, role string) *http.Request {
+	return req.WithContext(middleware.ContextWithRole(req.Context(), role))
+}
+
 func decodeBody(t *testing.T, rec *httptest.ResponseRecorder, v any) {
 	t.Helper()
 	if err := json.Unmarshal(rec.Body.Bytes(), v); err != nil {

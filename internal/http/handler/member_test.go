@@ -42,7 +42,7 @@ func TestCreateMember_Success(t *testing.T) {
 	svc := &fakeMemberService{createOut: member.Member{ID: "mem-1", Role: "attendee"}}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"attendee"}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"attendee"}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -62,7 +62,7 @@ func TestCreateMember_InvalidBody_Returns422(t *testing.T) {
 	svc := &fakeMemberService{}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -77,7 +77,7 @@ func TestCreateMember_UserNotFound_Returns404(t *testing.T) {
 	svc := &fakeMemberService{createErr: domain.ErrNotFound}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"nobody@example.com","role":"attendee"}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"nobody@example.com","role":"attendee"}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -92,7 +92,7 @@ func TestCreateMember_Forbidden_Returns403(t *testing.T) {
 	svc := &fakeMemberService{createErr: domain.ErrForbidden}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"admin"}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"admin"}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -107,7 +107,7 @@ func TestCreateMember_Conflict_Returns409WithAlreadyMemberCode(t *testing.T) {
 	svc := &fakeMemberService{createErr: domain.ErrConflict}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"attendee"}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPost, "/v1/events/evt-1/members", strings.NewReader(`{"email":"person@example.com","role":"attendee"}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -128,7 +128,7 @@ func TestListMembers_Success(t *testing.T) {
 	svc := &fakeMemberService{listOut: member.Page{Members: []member.Member{{ID: "mem-1"}}}}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodGet, "/v1/events/evt-1/members", nil))
+	req := withRole(withActor(httptest.NewRequest(http.MethodGet, "/v1/events/evt-1/members", nil)), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -139,11 +139,30 @@ func TestListMembers_Success(t *testing.T) {
 	}
 }
 
+// TestListMembers_NoRoleInContext_Returns500 is the wiring-bug case,
+// matching TestCreateEvent_NoActorInContext_Returns500's precedent: Authz
+// must run before this handler and attach a role, or the presenter has no
+// basis for its email-visibility decision.
+func TestListMembers_NoRoleInContext_Returns500(t *testing.T) {
+	svc := &fakeMemberService{}
+	h := handler.NewMemberHandler(svc, discardLogger())
+
+	req := withActor(httptest.NewRequest(http.MethodGet, "/v1/events/evt-1/members", nil))
+	req.SetPathValue("eventId", "evt-1")
+	rec := httptest.NewRecorder()
+
+	h.ListMembers(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("got status %d, want 500 when no caller role is in context", rec.Code)
+	}
+}
+
 func TestListMembers_MalformedCursor_Returns400(t *testing.T) {
 	svc := &fakeMemberService{}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodGet, "/v1/events/evt-1/members?cursor=not-valid-base64!!", nil))
+	req := withRole(withActor(httptest.NewRequest(http.MethodGet, "/v1/events/evt-1/members?cursor=not-valid-base64!!", nil)), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	rec := httptest.NewRecorder()
 
@@ -158,7 +177,7 @@ func TestAssignRole_Success(t *testing.T) {
 	svc := &fakeMemberService{assignOut: member.Member{ID: "mem-1", Role: "contributor"}}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	req.SetPathValue("memberId", "mem-1")
 	rec := httptest.NewRecorder()
@@ -174,7 +193,7 @@ func TestAssignRole_InvalidBody_Returns422(t *testing.T) {
 	svc := &fakeMemberService{}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	req.SetPathValue("memberId", "mem-1")
 	rec := httptest.NewRecorder()
@@ -190,7 +209,7 @@ func TestAssignRole_VersionMismatch_Returns409WithVersionConflictCode(t *testing
 	svc := &fakeMemberService{assignErr: domain.ErrVersionMismatch}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	req.SetPathValue("memberId", "mem-1")
 	rec := httptest.NewRecorder()
@@ -212,7 +231,7 @@ func TestAssignRole_LastAdminConflict_Returns409WithLastAdminCode(t *testing.T) 
 	svc := &fakeMemberService{assignErr: domain.ErrConflict}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	req.SetPathValue("memberId", "mem-1")
 	rec := httptest.NewRecorder()
@@ -234,7 +253,7 @@ func TestAssignRole_NotFound_Returns404(t *testing.T) {
 	svc := &fakeMemberService{assignErr: domain.ErrNotFound}
 	h := handler.NewMemberHandler(svc, discardLogger())
 
-	req := withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`)))
+	req := withRole(withActor(httptest.NewRequest(http.MethodPatch, "/v1/events/evt-1/members/mem-1", strings.NewReader(`{"role":"contributor","version":1}`))), "admin")
 	req.SetPathValue("eventId", "evt-1")
 	req.SetPathValue("memberId", "mem-1")
 	rec := httptest.NewRecorder()

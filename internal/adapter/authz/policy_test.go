@@ -251,9 +251,12 @@ func TestPolicy_Can_ReflectsMigrationSeededMatrix(t *testing.T) {
 				eventID := seedEvent(t, pool)
 				seedMember(t, pool, eventID, userID, role)
 
-				allowed, err := policy.Can(context.Background(), userID, eventID, c.Action, c.Resource)
+				allowed, gotRole, err := policy.Can(context.Background(), userID, eventID, c.Action, c.Resource)
 				if err != nil {
 					t.Fatalf("Can: %v", err)
+				}
+				if gotRole != role {
+					t.Errorf("Can(%s, %s:%s) role = %q, want %q", role, c.Resource, c.Action, gotRole, role)
 				}
 				if !allowed {
 					t.Errorf("Can(%s, %s:%s) = false, want true (docs/requirements.md §4)", role, c.Resource, c.Action)
@@ -275,12 +278,15 @@ func TestPolicy_Can_ContributorAssignRole_ReturnsDenied(t *testing.T) {
 	eventID := seedEvent(t, pool)
 	seedMember(t, pool, eventID, userID, "contributor")
 
-	allowed, err := policy.Can(context.Background(), userID, eventID, domainauthz.ActionAssignRole, domainauthz.ResourceMember)
+	allowed, gotRole, err := policy.Can(context.Background(), userID, eventID, domainauthz.ActionAssignRole, domainauthz.ResourceMember)
 	if err != nil {
 		t.Fatalf("Can: %v", err)
 	}
 	if allowed {
 		t.Error("Can(contributor, member:assign-role) = true, want false -- a contributor must never change roles")
+	}
+	if gotRole != "contributor" {
+		t.Errorf("Can role = %q, want contributor -- role must be returned even when the action is denied", gotRole)
 	}
 }
 
@@ -291,12 +297,15 @@ func TestPolicy_Can_NonMemberOfRealEvent_ReturnsFalseNotError(t *testing.T) {
 	userID := seedUser(t, pool)
 	eventID := seedEvent(t, pool) // no event_members row for userID
 
-	allowed, err := policy.Can(context.Background(), userID, eventID, domainauthz.ActionRead, domainauthz.ResourceEvent)
+	allowed, gotRole, err := policy.Can(context.Background(), userID, eventID, domainauthz.ActionRead, domainauthz.ResourceEvent)
 	if err != nil {
 		t.Fatalf("Can: %v, want nil error for a non-member", err)
 	}
 	if allowed {
 		t.Error("Can returned true for a user with no event_members row, want false")
+	}
+	if gotRole != "" {
+		t.Errorf("Can role = %q, want empty string for a non-member", gotRole)
 	}
 }
 
@@ -311,11 +320,14 @@ func TestPolicy_Can_NonExistentEvent_ReturnsFalseSameAsNonMember(t *testing.T) {
 	userID := seedUser(t, pool)
 	nonExistentEventID := randomUUIDv4()
 
-	allowed, err := policy.Can(context.Background(), userID, nonExistentEventID, domainauthz.ActionRead, domainauthz.ResourceEvent)
+	allowed, gotRole, err := policy.Can(context.Background(), userID, nonExistentEventID, domainauthz.ActionRead, domainauthz.ResourceEvent)
 	if err != nil {
 		t.Fatalf("Can: %v, want nil error for a non-existent event -- must not leak existence via an error either", err)
 	}
 	if allowed {
 		t.Error("Can returned true for a non-existent event, want false")
+	}
+	if gotRole != "" {
+		t.Errorf("Can role = %q, want empty string for a non-existent event", gotRole)
 	}
 }

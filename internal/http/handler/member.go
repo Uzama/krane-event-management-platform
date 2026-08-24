@@ -65,6 +65,13 @@ func (h *MemberHandler) CreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	callerRole, ok := middleware.RoleFromContext(r.Context())
+	if !ok {
+		h.logger.Error("member: no caller role in context; Authz must run before this handler")
+		h.writeInternalError(w)
+		return
+	}
+
 	created, err := h.service.CreateMember(r.Context(), actor.ID, eventID, req.ToCreateInput())
 	if err != nil {
 		switch {
@@ -81,7 +88,7 @@ func (h *MemberHandler) CreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusCreated, response.NewMemberResponse(created))
+	h.writeJSON(w, http.StatusCreated, response.NewMemberResponse(created, callerRole))
 }
 
 // ListMembers handles GET /v1/events/{eventId}/members, mounted behind
@@ -90,6 +97,13 @@ func (h *MemberHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventId")
 	if eventID == "" {
 		h.logger.Error("member: no eventId path value; route is not /v1/events/{eventId}/members")
+		h.writeInternalError(w)
+		return
+	}
+
+	callerRole, ok := middleware.RoleFromContext(r.Context())
+	if !ok {
+		h.logger.Error("member: no caller role in context; Authz must run before this handler")
 		h.writeInternalError(w)
 		return
 	}
@@ -123,7 +137,7 @@ func (h *MemberHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, response.NewMemberListResponse(page))
+	h.writeJSON(w, http.StatusOK, response.NewMemberListResponse(page, callerRole))
 }
 
 // AssignRole handles PATCH /v1/events/{eventId}/members/{memberId}, mounted
@@ -144,6 +158,13 @@ func (h *MemberHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	callerRole, ok := middleware.RoleFromContext(r.Context())
+	if !ok {
+		h.logger.Error("member: no caller role in context; Authz must run before this handler")
+		h.writeInternalError(w)
+		return
+	}
+
 	var req request.AssignRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeValidationError(w, map[string]any{"body": "must be valid JSON"})
@@ -160,7 +181,7 @@ func (h *MemberHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, response.NewMemberResponse(updated))
+	h.writeJSON(w, http.StatusOK, response.NewMemberResponse(updated, callerRole))
 }
 
 // RemoveMember handles DELETE /v1/events/{eventId}/members/{memberId}?version=N,

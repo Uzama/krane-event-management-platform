@@ -518,6 +518,154 @@ func TestEventsIntegration_NoToken_Returns401(t *testing.T) {
 	}
 }
 
+// TestEventsIntegration_AttendeeEventRead_NoEmailOrRosterKeyAnywhere is item
+// 10's core deliverable (FEATURES.md), proved at the real, full stack: an
+// attendee reading an event they belong to must get back a body with no
+// roster and no email anywhere. The event is populated first -- an admin
+// (the creator), a contributor, and the attendee under test -- so this is
+// proven against a real roster with real emails behind it, not vacuously on
+// an empty one. EventResponse has no roster/email field at all today, so
+// this is a regression guard as much as a proof: it fails the moment anyone
+// adds one without a presenter to match.
+func TestEventsIntegration_AttendeeEventRead_NoEmailOrRosterKeyAnywhere(t *testing.T) {
+	srv, pool := newEventsServer(t)
+
+	adminSub := eventsITUniqueSubject(t)
+	adminToken := mintEventsITToken(t, adminSub)
+
+	createBody := `{"name":"Populated Event","timezone":"Asia/Colombo","starts_at":"2026-03-15T10:00:00Z","ends_at":"2026-03-15T11:00:00Z"}`
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events", bearer: adminToken, body: createBody})
+	if resp.status != http.StatusCreated {
+		t.Fatalf("create: got status %d, want 201: %s", resp.status, resp.body)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(resp.body, &created); err != nil {
+		t.Fatalf("decoding create response: %v", err)
+	}
+
+	contributorSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, created.ID, contributorSub, "contributor")
+
+	attendeeSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, created.ID, attendeeSub, "attendee")
+	attendeeToken := mintEventsITToken(t, attendeeSub)
+
+	resp = doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events/" + created.ID, bearer: attendeeToken})
+	if resp.status != http.StatusOK {
+		t.Fatalf("attendee get: got status %d, want 200: %s", resp.status, resp.body)
+	}
+	for _, forbidden := range []string{"email", "roster", "members"} {
+		assertNoKeyContaining(t, resp.body, forbidden)
+	}
+
+	resp = doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events", bearer: attendeeToken})
+	if resp.status != http.StatusOK {
+		t.Fatalf("attendee list: got status %d, want 200: %s", resp.status, resp.body)
+	}
+	for _, forbidden := range []string{"email", "roster", "members"} {
+		assertNoKeyContaining(t, resp.body, forbidden)
+	}
+}
+
+// TestEventsIntegration_AttendeeEventList_OnlyOwnEvents is item 10's must:
+// test (b) event half -- session-list scoping is deferred to item 12
+// (FEATURES.md forward note; no session-list endpoint exists yet). Event
+// scoping itself already ships from EventRepository.List's event_members
+// join (item 08); this re-proves it explicitly under item 10's own name,
+// deliberately light rather than rebuilding item 08's suite.
+func TestEventsIntegration_AttendeeEventList_OnlyOwnEvents(t *testing.T) {
+	srv, pool := newEventsServer(t)
+
+	attendeeSub := eventsITUniqueSubject(t)
+	attendeeToken := mintEventsITToken(t, attendeeSub)
+
+	// An event the attendee belongs to.
+	ownerASub := eventsITUniqueSubject(t)
+	ownerAToken := mintEventsITToken(t, ownerASub)
+	bodyA := `{"name":"Attendee's Event","timezone":"Asia/Colombo","starts_at":"2026-03-15T10:00:00Z","ends_at":"2026-03-15T11:00:00Z"}`
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events", bearer: ownerAToken, body: bodyA})
+	if resp.status != http.StatusCreated {
+		t.Fatalf("create event A: got status %d, want 201: %s", resp.status, resp.body)
+	}
+	var eventA struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(resp.body, &eventA); err != nil {
+		t.Fatalf("decoding event A: %v", err)
+	}
+	seedEventsITMember(t, pool, eventA.ID, attendeeSub, "attendee")
+
+	// A second, unrelated event with a different admin -- the attendee has
+	// no standing on it at all.
+	ownerBSub := eventsITUniqueSubject(t)
+	ownerBToken := mintEventsITToken(t, ownerBSub)
+	bodyB := `{"name":"Someone Else's Event","timezone":"Asia/Colombo","starts_at":"2026-03-15T10:00:00Z","ends_at":"2026-03-15T11:00:00Z"}`
+	resp = doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events", bearer: ownerBToken, body: bodyB})
+	if resp.status != http.StatusCreated {
+		t.Fatalf("create event B: got status %d, want 201: %s", resp.status, resp.body)
+	}
+	var eventB struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(resp.body, &eventB); err != nil {
+		t.Fatalf("decoding event B: %v", err)
+	}
+
+	resp = doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events", bearer: attendeeToken})
+	if resp.status != http.StatusOK {
+		t.Fatalf("attendee list: got status %d, want 200: %s", resp.status, resp.body)
+	}
+	var list struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.body, &list); err != nil {
+		t.Fatalf("decoding list response: %v", err)
+	}
+	if len(list.Data) != 1 || list.Data[0].ID != eventA.ID {
+		t.Fatalf("attendee's event list = %+v, want exactly [%s]", list.Data, eventA.ID)
+	}
+}
+
+// assertNoKeyContaining walks the full JSON tree -- maps AND slices, at
+// every nesting depth -- and fails if any object key contains substr,
+// case-insensitively. Deliberately KEY-only: a value smuggled under a
+// differently-named key would not be caught -- an accepted limit for this
+// feature, not a general PII scanner. Mirrors
+// internal/http/response.assertNoKeyContaining; duplicated rather than
+// imported since that one lives in an internal _test.go file in a
+// different package.
+func assertNoKeyContaining(t *testing.T, body []byte, substr string) {
+	t.Helper()
+
+	var tree any
+	if err := json.Unmarshal(body, &tree); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	walkNoKeyContaining(t, tree, substr, body)
+}
+
+func walkNoKeyContaining(t *testing.T, node any, substr string, body []byte) {
+	t.Helper()
+
+	switch v := node.(type) {
+	case map[string]any:
+		for k, child := range v {
+			if strings.Contains(strings.ToLower(k), strings.ToLower(substr)) {
+				t.Errorf("found key %q containing %q in response body: %s", k, substr, body)
+			}
+			walkNoKeyContaining(t, child, substr, body)
+		}
+	case []any:
+		for _, child := range v {
+			walkNoKeyContaining(t, child, substr, body)
+		}
+	}
+}
+
 func TestEventsIntegration_List_MalformedCursor_Returns400(t *testing.T) {
 	srv, _ := newEventsServer(t)
 
