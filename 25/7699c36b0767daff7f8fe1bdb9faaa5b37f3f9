@@ -1,0 +1,35 @@
+Makefile
+  s_045d320bbb01f5::t_dcc8965e3e6729 77
+  s_045d320bbb01f5::t_6265b44589cc44 104-118
+  s_045d320bbb01f5::t_2d8d68ccc31fa6 102
+  s_045d320bbb01f5::t_9819aa00f54065 61-68
+  s_045d320bbb01f5::t_7c9aef40ac06b5 99-101
+  s_045d320bbb01f5::t_92396579ec7d20 103
+docker-compose.yml
+  s_045d320bbb01f5::t_12a4d42470bc91 7-12,15-18
+  s_045d320bbb01f5::t_d2d671cae5d2b2 140-141
+  s_045d320bbb01f5::t_04cfe345c93b69 166-167
+  s_045d320bbb01f5::t_0e116d74005dab 120-139,142
+scripts/require-go.sh
+  s_045d320bbb01f5::t_a5c6a6759a7f7e 33-34
+  s_045d320bbb01f5::t_d8987ca3cd9b20 4-7
+README.md
+  s_045d320bbb01f5::t_e203909c0e3bdd 22-23
+  s_045d320bbb01f5::t_05d54ef7449e37 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "257699c36b0767daff7f8fe1bdb9faaa5b37f3f9",
+  "prompts": {},
+  "sessions": {
+    "s_045d320bbb01f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ee1ea3e-70a9-4993-a62d-e381da76a357",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
