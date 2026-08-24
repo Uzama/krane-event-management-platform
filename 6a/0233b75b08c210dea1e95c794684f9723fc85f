@@ -1,0 +1,65 @@
+FEATURES.md
+  s_8e7072b62f303f::t_42a44749990db2 28
+internal/http/handler/room.go
+  s_8e7072b62f303f::t_8400a6072b8154 1-276
+internal/container/container.go
+  s_8e7072b62f303f::t_db8c661bc75a6d 74,85
+  s_8e7072b62f303f::t_38e57be3503691 19
+  s_8e7072b62f303f::t_c5ab5e3f20b081 41
+internal/http/response/room.go
+  s_8e7072b62f303f::t_0ddb612f3975ff 1-55
+internal/domain/room/service_test.go
+  s_8e7072b62f303f::t_fce80980f40909 1-181
+internal/domain/room/port.go
+  s_8e7072b62f303f::t_ef1475642880e6 1-72
+internal/http/rooms_integration_test.go
+  s_8e7072b62f303f::t_b03972450b9672 1-328,343-344,346-380
+  s_8e7072b62f303f::t_6297fe52ad165c 329-342
+  s_8e7072b62f303f::t_40dd5217a537e5 345
+internal/http/response/room_test.go
+  s_8e7072b62f303f::t_1cb57efebeb2af 1-90
+AUDIT.md
+  s_8e7072b62f303f::t_ad18d13fc2c9a7 211-226
+internal/domain/room/entity.go
+  s_8e7072b62f303f::t_f676d577780b61 1-20
+internal/http/handler/room_test.go
+  s_8e7072b62f303f::t_04668f5b4a2d17 1-404
+internal/domain/room/service.go
+  s_8e7072b62f303f::t_5d868b80f0a31d 1-36
+internal/adapter/postgres/room_repo_test.go
+  s_8e7072b62f303f::t_994d13c97426fe 1-568
+internal/http/router.go
+  s_8e7072b62f303f::t_38c55ef6f06373 52-57,69-71,84-88
+  s_8e7072b62f303f::t_2870a76bfbdc57 22
+  s_8e7072b62f303f::t_25fda5ac7bdf8f 89
+openapi/openapi.yaml
+  s_8e7072b62f303f::t_740aecb32fbfeb 370-566
+  s_8e7072b62f303f::t_023afa09b219d5 849-939
+internal/http/gen/api.gen.go
+  s_8e7072b62f303f::t_3b470241310cec 188-223,265-277,290-295,328-342,719-937,1068-1072
+internal/adapter/postgres/room_repo.go
+  s_8e7072b62f303f::t_463f404814019e 1-292
+internal/http/request/room.go
+  s_8e7072b62f303f::t_30fd4d2b3c681b 45-47
+  s_8e7072b62f303f::t_d06b29221dec70 1-44,48-71
+internal/bootstrap/bootstrap.go
+  s_8e7072b62f303f::t_20d442e9c94e8b 31
+internal/http/request/room_test.go
+  s_8e7072b62f303f::t_ad6c8ddc56c15c 1-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "6a0233b75b08c210dea1e95c794684f9723fc85f",
+  "prompts": {},
+  "sessions": {
+    "s_8e7072b62f303f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b33236f4-257b-4d80-b1ce-32f6c1b11c84",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
