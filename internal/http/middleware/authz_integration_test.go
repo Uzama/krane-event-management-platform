@@ -40,11 +40,13 @@ func reachedHandler() http.Handler {
 	})
 }
 
-// realAuthzStack builds Auth -> Authz -> reachedHandler entirely from real
-// dependencies: the real mock OIDC issuer, the real krane_test database,
-// and a real adapter/authz.Policy loaded from the migration-seeded
-// role_permissions table.
-func realAuthzStack(t *testing.T, resource authz.Resource, action authz.Action) (http.Handler, *pgxpool.Pool) {
+// setupAuthzStackDeps builds the real, shared dependencies every test in
+// this file needs: the real mock OIDC verifier and a live pool against
+// krane_test. Split out of realAuthzStack so
+// TestAuthzIntegration_Contributor_MemberRead_ContextCarriesRole can wire
+// its own handler (a role-capturing one) onto the same real Auth->Authz
+// chain instead of the fixed reachedHandler.
+func setupAuthzStackDeps(t *testing.T) (middleware.TokenVerifier, *pgxpool.Pool) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -65,8 +67,20 @@ func realAuthzStack(t *testing.T, resource authz.Resource, action authz.Action) 
 	}
 	t.Cleanup(pool.Close)
 
+	return verifier, pool
+}
+
+// realAuthzStack builds Auth -> Authz -> reachedHandler entirely from real
+// dependencies: the real mock OIDC issuer, the real krane_test database,
+// and a real adapter/authz.Policy loaded from the migration-seeded
+// role_permissions table.
+func realAuthzStack(t *testing.T, resource authz.Resource, action authz.Action) (http.Handler, *pgxpool.Pool) {
+	t.Helper()
+
+	verifier, pool := setupAuthzStackDeps(t)
+
 	users := user.NewService(postgres.NewUserRepository(pool))
-	policy, err := adapterauthz.New(ctx, pool)
+	policy, err := adapterauthz.New(context.Background(), pool)
 	if err != nil {
 		t.Fatalf("adapterauthz.New: %v\n\nThe suite needs migrations/20260824090000_seed_role_permissions.up.sql applied -- run `make up`.", err)
 	}
@@ -159,6 +173,51 @@ func TestAuthzIntegration_Admin_AssignRole_Returns200AndReachesHandler(t *testin
 	}
 	if rec.Body.String() != reachedBody {
 		t.Errorf("got body %q, want %q -- request must actually reach the handler through Auth -> Authz", rec.Body.String(), reachedBody)
+	}
+}
+
+// TestAuthzIntegration_Contributor_MemberRead_ContextCarriesRole proves the
+// full real stack -- real OIDC token, real Postgres membership lookup --
+// attaches the caller's actual role to the request context by the time it
+// reaches the handler, which is what item 10's presenters read to shape a
+// response body.
+func TestAuthzIntegration_Contributor_MemberRead_ContextCarriesRole(t *testing.T) {
+	verifier, pool := setupAuthzStackDeps(t)
+	policy, err := adapterauthz.New(context.Background(), pool)
+	if err != nil {
+		t.Fatalf("adapterauthz.New: %v", err)
+	}
+	users := user.NewService(postgres.NewUserRepository(pool))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	var gotRole string
+	var ok bool
+	roleCapturing := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRole, ok = middleware.RoleFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /v1/events/{eventId}/members/role",
+		middleware.Auth(verifier, users, logger)(
+			middleware.Authz(policy, authz.ResourceMember, authz.ActionRead, logger)(roleCapturing),
+		),
+	)
+
+	eventID := seedITEvent(t, pool)
+	subject := uniqueTestSub(t)
+	seedITMember(t, pool, eventID, subject, "contributor")
+
+	rec := doAuthzRequest(t, mux, eventID, mintToken(t, subject, ""))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+	if !ok {
+		t.Fatal("RoleFromContext found no role; want Authz to attach the real membership row's role")
+	}
+	if gotRole != "contributor" {
+		t.Errorf("got role %q, want contributor", gotRole)
 	}
 }
 

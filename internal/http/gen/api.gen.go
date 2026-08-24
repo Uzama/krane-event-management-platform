@@ -148,7 +148,7 @@ type Member struct {
 	Id        openapi_types.UUID `json:"id"`
 	Role      MemberRole         `json:"role"`
 	UpdatedAt time.Time          `json:"updated_at"`
-	UserEmail string             `json:"user_email"`
+	UserEmail *string            `json:"user_email,omitempty"`
 	UserId    openapi_types.UUID `json:"user_id"`
 	UserName  string             `json:"user_name"`
 	Version   int                `json:"version"`

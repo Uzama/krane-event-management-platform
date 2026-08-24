@@ -14,11 +14,12 @@ import (
 
 type fakePolicy struct {
 	allowed bool
+	role    string
 	err     error
 }
 
-func (f *fakePolicy) Can(_ context.Context, _, _ string, _ authz.Action, _ authz.Resource) (bool, error) {
-	return f.allowed, f.err
+func (f *fakePolicy) Can(_ context.Context, _, _ string, _ authz.Action, _ authz.Resource) (bool, string, error) {
+	return f.allowed, f.role, f.err
 }
 
 func okNext(t *testing.T) (http.Handler, *bool) {
@@ -47,6 +48,37 @@ func authzRequest(t *testing.T, handler http.Handler, actor *user.User) *httptes
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	return rec
+}
+
+// roleCapturingNext records whatever role, if any, middleware.RoleFromContext
+// reports when the handler runs -- lets a test prove Authz actually attached
+// the role to the request context passed downstream, not just that it read
+// one from the policy.
+func roleCapturingNext(t *testing.T) (http.Handler, *string, *bool) {
+	t.Helper()
+	var gotRole string
+	var ok bool
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRole, ok = middleware.RoleFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}), &gotRole, &ok
+}
+
+func TestAuthz_Allowed_AttachesRoleToContext(t *testing.T) {
+	next, gotRole, ok := roleCapturingNext(t)
+	handler := middleware.Authz(&fakePolicy{allowed: true, role: "contributor"}, authz.ResourceSession, authz.ActionCreate, testLogger())(next)
+
+	rec := authzRequest(t, handler, &user.User{ID: "user-1"})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+	if !*ok {
+		t.Fatal("RoleFromContext found no role; want Authz to attach one on success")
+	}
+	if *gotRole != "contributor" {
+		t.Errorf("got role %q, want contributor", *gotRole)
+	}
 }
 
 func TestAuthz_Allowed_CallsNext(t *testing.T) {

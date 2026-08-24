@@ -208,6 +208,65 @@ func TestMembersIntegration_Roster_AdminAndContributorCanRead_AttendeeCannot(t *
 	}
 }
 
+// TestMembersIntegration_ContributorRoster_NoEmailKeyAnywhere is item 10's
+// must: test (a) at the real, full stack: real OIDC token, real Postgres,
+// real Authz -> presenter chain. D11 (docs/requirements.md §7.2): email is
+// admin-only PII, so a contributor listing the roster must get back a body
+// with no key containing "email" anywhere, at any nesting depth -- not
+// merely blank user_email fields.
+func TestMembersIntegration_ContributorRoster_NoEmailKeyAnywhere(t *testing.T) {
+	srv, pool := newMembersServer(t)
+	eventID, _ := createMembersITEvent(t, srv)
+
+	contributorSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, eventID, contributorSub, "contributor")
+	contributorToken := mintEventsITToken(t, contributorSub)
+
+	// A populated roster, not just the fixture's lone admin -- an attendee
+	// too, so the assertion is proven against real email-bearing rows, not
+	// vacuously on a near-empty roster.
+	attendeeSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, eventID, attendeeSub, "attendee")
+
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events/" + eventID + "/members", bearer: contributorToken})
+	if resp.status != http.StatusOK {
+		t.Fatalf("got status %d, want 200: %s", resp.status, resp.body)
+	}
+	assertNoKeyContaining(t, resp.body, "email")
+}
+
+// TestMembersIntegration_AdminRoster_IncludesEmail guards against
+// over-redaction -- D11 grants admin visibility, and this must keep
+// passing alongside the contributor test above, or the presenter has
+// collapsed to "nobody sees email."
+func TestMembersIntegration_AdminRoster_IncludesEmail(t *testing.T) {
+	srv, pool := newMembersServer(t)
+	eventID, adminToken := createMembersITEvent(t, srv)
+
+	attendeeSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, eventID, attendeeSub, "attendee")
+
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodGet, path: "/v1/events/" + eventID + "/members", bearer: adminToken})
+	if resp.status != http.StatusOK {
+		t.Fatalf("got status %d, want 200: %s", resp.status, resp.body)
+	}
+
+	var page struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(resp.body, &page); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(page.Data) == 0 {
+		t.Fatal("roster is empty, want at least the admin and the seeded attendee")
+	}
+	for _, m := range page.Data {
+		if _, ok := m["user_email"]; !ok {
+			t.Errorf("member %v missing user_email; admin must see it", m)
+		}
+	}
+}
+
 func TestMembersIntegration_DemotingSoleAdmin_Returns409LastAdmin(t *testing.T) {
 	srv, pool := newMembersServer(t)
 	eventID, adminToken := createMembersITEvent(t, srv)

@@ -102,21 +102,25 @@ func validateRoleCoverage(permissions map[permKey]struct{}, roles []string) erro
 // Can looks up userID's role on eventID, live, and checks it against the
 // permissions loaded at boot. No event_members row -- whether because
 // userID isn't a member of eventID or because eventID does not exist at
-// all -- answers (false, nil) either way: a caller with no standing on an
-// event has no standing to learn which of those two is true, so both cases
-// must stay indistinguishable at every layer above this one.
-func (p *Policy) Can(ctx context.Context, userID, eventID string, action domainauthz.Action, resource domainauthz.Resource) (bool, error) {
+// all -- answers (false, "", nil) either way: a caller with no standing on
+// an event has no standing to learn which of those two is true, so both
+// cases must stay indistinguishable at every layer above this one.
+//
+// The returned role is the same row this already looked up to answer
+// allowed -- callers must use it only to shape a response body, never to
+// decide whether the request proceeds (see the Policy interface doc).
+func (p *Policy) Can(ctx context.Context, userID, eventID string, action domainauthz.Action, resource domainauthz.Resource) (bool, string, error) {
 	const q = `SELECT role FROM event_members WHERE user_id = $1 AND event_id = $2`
 
 	var role string
 	err := p.pool.QueryRow(ctx, q, userID, eventID).Scan(&role)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
+			return false, "", nil
 		}
-		return false, fmt.Errorf("looking up membership: %w", err)
+		return false, "", fmt.Errorf("looking up membership: %w", err)
 	}
 
 	_, allowed := p.permissions[permKey{role, resource, action}]
-	return allowed, nil
+	return allowed, role, nil
 }
