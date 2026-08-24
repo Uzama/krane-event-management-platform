@@ -410,3 +410,27 @@ Completed feature 23, the last item in the 16-23 batch, scoped deliberately smal
 New endpoint `POST /v1/events/{eventId}/sessions/series`, same `Authz(session, create)` permission as a plain session create. `request.SeriesCreateRequest`/`response.SeriesResponse` follow `CreateSessionRequest`'s existing local-wall-clock-string convention (`first_starts_at`/`first_ends_at`, resolved against the event's timezone once, every later occurrence offset server-side). `openapi/openapi.yaml` gains the path and three schemas (`SeriesCreateRequest`, `Series`, `SeriesOccurrenceResult`); regenerated cleanly.
 
 Verification: `make test` (full suite, `-race`) green, including 5 new repository-level tests, 3 new handler tests, and 1 full-stack integration test (real router, real mock OIDC, real Postgres) confirming materialized occurrences are reachable through the ordinary `GET` route and match the OpenAPI contract; `make lint` clean; `make contract-check` clean; `make seed` re-run clean against the new nullable `series_id` column. No `FAILURES.md` addition -- the `Get` gap was caught and fixed within this same TDD cycle, before any code shipped uncorrected.
+
+## 2026-08-24 -- Feature 24 · Three ADRs
+
+Completed feature 24 on the `documentaion` branch. `docs/adr/0001-router-choice.md`, `0002-agent-model-and-client.md`, `0003-recurring-sessions-eager-materialization.md` -- each stating the decision, the alternative(s) rejected, and why, in the standard ADR shape (Decision / Alternative rejected / Why / Consequence). No new decisions made here: each ADR's reasoning is drawn directly from what item 05, item 15, and item 23 already recorded in `AUDIT.md` and `FEATURES.md`'s own notes, not re-litigated.
+
+## 2026-08-24 -- Feature 25 · AI-WORKFLOW.md
+
+Completed feature 25. `AI-WORKFLOW.md` covers tools used (Claude Code only, no other AI tool touched the code), what was driven by the human (the invariants in `CLAUDE.md`, the three-gate workflow, every `AskUserQuestion` decision) versus delegated to the model (everything downstream of a signed-off plan), and the planning process (the same plan → stop → branch/TDD → stop → log → stop-for-commit loop every feature in this repo actually ran through).
+
+The required "one specific case where the AI produced wrong code" section draws on `ISSUE.md`'s 2026-08-24 entry: item 09's first race test (a bare goroutine-barrier version) passed 20/20 with the admin-count lock deliberately removed, meaning it never actually proved the lock mattered. Caught by a human review-gate instruction to "confirm it actually races" rather than trust the green run -- not by the test itself, and not by the model's own review. Named explicitly as the clearest instance in this project of AI output that looked correct, passed its own test, and was wrong.
+
+## 2026-08-24 -- Feature 26 · TRADEOFFS.md
+
+Completed feature 26. Expanded the existing per-item `TRADEOFFS.md` (populated so far only by item 23's recurring-sessions cuts) with a new top-level "Track and overall scope" section: which track (1 -- backend data correctness under load) and why it was picked over the breadth alternative; what that choice forced project-wide (version columns on every mutable row, seed at real scale to make items 18/19 provable, concurrency tests that had to prove they could fail, authorization as data rather than code); the two item-01 scope cuts (invitation acceptance lifecycle, cross-event physical-room conflicts) that were previously only narrated in `AUDIT.md`, now recorded here where the brief expects them; and an overall "what two more weeks would buy" list, prioritized. Item 23's existing entry is unchanged, sitting below the new section.
+
+## 2026-08-24 -- Feature 28 · Fresh-clone verification
+
+Completed feature 28 on the `documentaion` branch, run last as instructed, after 24-26 landed (27 was already done outside this queue's tracking, per direct instruction, and needed no work here). Actually executed, not merely described: `git clone --branch documentaion --single-branch` into a scratch directory outside the repo, with `COMPOSE_PROJECT_NAME=krane_freshclone` and overridden host ports (`POSTGRES_PORT`/`OIDC_PORT`/`API_PORT` via a throwaway `.env`) so the run never touched the developer's own already-running `krane` stack or its data -- a true isolated boot, not a reuse of existing containers/volumes under the same compose project name.
+
+`make up && make seed && make test` ran green end to end, exit 0, **33s** wall clock (well under the 5-minute budget; warm, since the Docker images were already pulled locally from earlier work in this same session -- item 03's original entry already documents the cold-pull figure, 1m25s, which this run did not re-measure). Torn down afterward with `docker compose --profile tools down -v --remove-orphans` and the scratch directory removed, leaving no residue and no interference with the developer's own stack, which was confirmed still running and untouched (`krane-postgres-1`, `krane-oidc-1`) throughout.
+
+No fixes were needed -- nothing was found to be non-reproducible.
+
+Also shipped this branch, not its own numbered item but requested alongside 24-28: `README.md` -- what the project is, how to run/test/tear down, restating the graded contract (`make up && make seed && make test`, under 5 minutes on a clean machine, "if it fails, we stop reading") verbatim as the working-setup header, plus the agent-running instructions and a repository map pointing at `docs/adr/`, `TRADEOFFS.md`, and `AI-WORKFLOW.md`.

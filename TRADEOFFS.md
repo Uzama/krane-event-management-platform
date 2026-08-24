@@ -4,6 +4,34 @@ Cuts and scope decisions, recorded as they're made. Item 26 (Phase 4) expands th
 
 ---
 
+## Track and overall scope
+
+**Track chosen: 1 — Backend (data correctness under load).** The alternative offered was a frontend/product-breadth track; this one was picked because the assignment's own invariants — no check-then-act, `EXCLUDE` constraints over application locking, lost-update protection, keyset pagination at scale, idempotent bulk writes, append-only audit — are exactly the kind of thing that's easy to *claim* and hard to *prove*, and the brief rewards proof (a race test, a query-count test, a 50k-row pagination test) over surface area. Phase 3 (items 16–23) is this track's payload; everything in Phase 1–2 exists to give it somewhere to attach.
+
+### What Track 1 forced
+
+Choosing correctness-under-load as the axis of depth had consequences that a breadth-first track wouldn't have faced:
+
+- **Every mutation needed a version column and a version-gated `WHERE`** (item 17), not just the ones an examiner might think to test — retrofitting this after the fact across events/rooms/sessions/event_members would have been far more invasive than introducing `opt.Optional[T]` once (item 08, pulled forward from its original item 12/20 slot) and reusing it everywhere.
+- **The seed generator (item 14) had to be a first-class piece of engineering, not a fixture script** — 50k invitations and 5k users exist specifically so items 18 (query-count) and 19 (keyset pagination) have something real to measure against, and item 14's own `noSpeakerOrRoomOverlap` guard had to independently satisfy the room/speaker `EXCLUDE` constraints item 16 adds two items later.
+- **Concurrency tests had to be trusted, not just green** — the admin-count race (item 09) and the room/speaker `EXCLUDE` race (item 16) both required proving the test fails when the guard is removed, not just that it passes when the guard is present. See `AI-WORKFLOW.md`'s worked example and `FAILURES.md`'s rule on bare goroutine barriers.
+- **Authorization had to be data, not code**, because response-shaping (item 10) and repository-level defense-in-depth (item 13's fail-closed escalation guard) both need to reason about roles independently of the HTTP layer — a hardcoded `if role == "admin"` chain would have made at least three of the depth items harder to prove in isolation.
+- **Less room for product breadth.** There is no session check-in flow, no notification system, no calendar export, no search — the track's own name says where the two weeks went.
+
+### What was cut, project-wide
+
+Beyond item 23's recurring-sessions cuts (below), two decisions from item 01's requirement analysis narrowed scope before any code existed:
+
+- **Invitation acceptance lifecycle.** Invitations stay an independent record with no `status`/`responded_at` column and no accept/decline endpoint; membership is populated directly by an admin/contributor invite call, keeping every read path behind the existing per-event authz chokepoint rather than adding a second, unauthenticated acceptance flow.
+- **Cross-event physical-room conflicts.** Rooms are per-event (not a shared physical inventory), so item 16's `EXCLUDE` constraint prevents exactly the conflicts the data model claims to represent. The known gap: two different events in the same real building can each book a room named "Hall A" without the database ever knowing they're the same physical space.
+- **No update/delete on a sent invitation** (item 13) — a wrong-role invite to an already-invited email is unfixable via the API; the only recourse is a fresh invite after the email itself changes, or direct DB access. Recorded here because it surfaces as a real rough edge, not just an implementation detail.
+
+### What two more weeks would buy
+
+In priority order, if this track continued: a session check-in/attendance flow (the most product-visible gap); the invitation acceptance lifecycle with a real status column and a public accept/decline link; cross-event room-conflict awareness (shared physical inventory, or at minimum a warning); the recurring-sessions read endpoint and series-level operations listed under item 23 below; and ETag/If-Match as an additive alternative to the body/query-param version scheme (item 17 kept the latter as the sole mechanism, judged sufficient, not because the former was rejected on merits).
+
+---
+
 ## Item 23 — Recurring sessions (go-further pick)
 
 Chosen as the go-further pick over the caching/two-versions-live and webhooks alternatives: it exercises the same correctness machinery (items 16/17/22) under a new write shape, rather than adding an orthogonal concern.
