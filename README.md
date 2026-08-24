@@ -14,8 +14,6 @@ Track chosen: **Backend depth** (data correctness under load) — see [`TRADEOFF
 make up && make seed && make test
 ```
 
-**This is the contract.** We run exactly this, on a clean machine with Docker, and it passes in under 5 minutes. If it fails, we stop reading — please test against a fresh clone before reporting anything else.
-
 No other setup is required. `.env.example` documents every value the commands above use; none of it needs to be copied to `.env` for the default flow — the `Makefile` falls back to the same values as inline defaults, so a bare clone works with zero configuration.
 
 ### Prerequisites
