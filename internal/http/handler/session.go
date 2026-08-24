@@ -228,7 +228,7 @@ func (h *SessionHandler) PatchSession(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.service.UpdateSession(r.Context(), actor.ID, eventID, sessionID, req.Version, req.ToPatch(loc))
 	if err != nil {
-		h.writeUpdateOrDeleteError(w, "session: updating", eventID, sessionID, err)
+		h.writeUpdateOrDeleteError(w, r.Context(), loc, "session: updating", eventID, sessionID, err)
 		return
 	}
 
@@ -237,10 +237,10 @@ func (h *SessionHandler) PatchSession(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSession handles DELETE
 // /v1/events/{eventId}/sessions/{sessionId}?version=N, mounted behind
-// Authz(session, delete). version is a required query parameter, matching
-// DeleteRoom/DeleteEvent's interim convention pending item 17's If-Match
-// design. This is a soft delete (session.Repository.Delete), matching
-// events, not rooms.
+// Authz(session, delete). version is a required query parameter -- item 17
+// kept this design permanently rather than retrofitting ETag/If-Match; see
+// event.go's DeleteEvent comment. This is a soft delete
+// (session.Repository.Delete), matching events, not rooms.
 func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	actor, ok := middleware.UserFromContext(r.Context())
 	if !ok {
@@ -257,6 +257,12 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, loc, err := h.eventTimezone(r.Context(), eventID)
+	if err != nil {
+		h.writeEventLookupError(w, "session: deleting", eventID, err)
+		return
+	}
+
 	raw := r.URL.Query().Get("version")
 	version, err := strconv.Atoi(raw)
 	if raw == "" || err != nil || version <= 0 {
@@ -265,7 +271,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.service.DeleteSession(r.Context(), actor.ID, eventID, sessionID, version); err != nil {
-		h.writeUpdateOrDeleteError(w, "session: deleting", eventID, sessionID, err)
+		h.writeUpdateOrDeleteError(w, r.Context(), loc, "session: deleting", eventID, sessionID, err)
 		return
 	}
 
@@ -314,13 +320,26 @@ func (h *SessionHandler) writeNotFoundOrInternal(w http.ResponseWriter, logMsg, 
 }
 
 // writeUpdateOrDeleteError maps PatchSession/DeleteSession's shared
-// vocabulary.
-func (h *SessionHandler) writeUpdateOrDeleteError(w http.ResponseWriter, logMsg, eventID, sessionID string, err error) {
+// vocabulary. ErrVersionMismatch (item 17) embeds the session's current
+// state under details.current, same as event.go/room.go's equivalent.
+func (h *SessionHandler) writeUpdateOrDeleteError(w http.ResponseWriter, ctx context.Context, loc *time.Location, logMsg, eventID, sessionID string, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		h.writeError(w, http.StatusNotFound, "not_found", "no such session")
 	case errors.Is(err, domain.ErrVersionMismatch):
-		h.writeError(w, http.StatusConflict, "version_conflict", "the session was modified by someone else; reload and retry")
+		details := map[string]any{"current": nil}
+		switch current, getErr := h.service.GetSession(ctx, eventID, sessionID); {
+		case getErr == nil:
+			details["current"] = response.NewSessionResponse(current, loc)
+		case errors.Is(getErr, domain.ErrNotFound):
+			// Winning writer deleted the session between the failed write
+			// and this re-fetch -- expected, not a bug. Stays explicitly null.
+		default:
+			h.logger.Error("session: fetching current state after version conflict", "event_id", eventID, "session_id", sessionID, "error", getErr)
+		}
+		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the session was modified by someone else; reload and retry", details); writeErr != nil {
+			h.logger.Error("session: writing error envelope", "error", writeErr)
+		}
 	default:
 		h.logger.Error(logMsg, "event_id", eventID, "session_id", sessionID, "error", err)
 		h.writeInternalError(w)

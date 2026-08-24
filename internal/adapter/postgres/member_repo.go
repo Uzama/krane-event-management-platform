@@ -170,6 +170,32 @@ func (r *MemberRepository) Create(ctx context.Context, actorID, eventID string, 
 	return row.toMember(emailStr, ""), nil
 }
 
+// Get returns a single member row, scoped to both id and eventID -- a
+// membership belonging to a different event is indistinguishable from a
+// missing one, same as room.Repository.Get/session.Repository.Get. Added
+// for item 17: a version conflict's 409 response needs to embed the
+// current row, and List's cursor pagination isn't a reliable way to find
+// one specific id.
+func (r *MemberRepository) Get(ctx context.Context, eventID, memberID string) (member.Member, error) {
+	const q = `
+		SELECT em.id, em.event_id, em.user_id, em.role, em.version, em.created_at, em.updated_at, u.email, u.name
+		FROM event_members em
+		JOIN users u ON u.id = em.user_id
+		WHERE em.id = $1 AND em.event_id = $2`
+
+	var m member.Member
+	err := r.pool.QueryRow(ctx, q, memberID, eventID).Scan(
+		&m.ID, &m.EventID, &m.UserID, &m.Role, &m.Version, &m.CreatedAt, &m.UpdatedAt, &m.UserEmail, &m.UserName,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return member.Member{}, domain.ErrNotFound
+		}
+		return member.Member{}, fmt.Errorf("getting member: %w", err)
+	}
+	return m, nil
+}
+
 // List returns eventID's roster, ordered by (created_at, id) -- never
 // OFFSET. It fetches one extra row to decide whether a further page
 // exists, then trims it before returning.

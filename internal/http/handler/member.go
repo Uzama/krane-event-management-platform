@@ -21,6 +21,7 @@ import (
 // this interface, never on the concrete service type.
 type MemberService interface {
 	CreateMember(ctx context.Context, actorID, eventID string, in member.CreateInput) (member.Member, error)
+	GetMember(ctx context.Context, eventID, memberID string) (member.Member, error)
 	ListMembers(ctx context.Context, eventID string, limit int, after *member.Cursor) (member.Page, error)
 	AssignRole(ctx context.Context, actorID, eventID, memberID string, version int, role string) (member.Member, error)
 	RemoveMember(ctx context.Context, actorID, eventID, memberID string, version int) error
@@ -177,7 +178,7 @@ func (h *MemberHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.service.AssignRole(r.Context(), actor.ID, eventID, memberID, req.Version, req.Role)
 	if err != nil {
-		h.writeAssignOrRemoveError(w, "member: assigning role", eventID, memberID, err)
+		h.writeAssignOrRemoveError(w, r.Context(), callerRole, "member: assigning role", eventID, memberID, err)
 		return
 	}
 
@@ -186,8 +187,8 @@ func (h *MemberHandler) AssignRole(w http.ResponseWriter, r *http.Request) {
 
 // RemoveMember handles DELETE /v1/events/{eventId}/members/{memberId}?version=N,
 // mounted behind Authz(member, delete). version is a required query
-// parameter, matching DeleteEvent's interim convention pending item 17's
-// If-Match design.
+// parameter -- item 17 kept this design permanently rather than
+// retrofitting ETag/If-Match; see event.go's DeleteEvent comment.
 func (h *MemberHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	actor, ok := middleware.UserFromContext(r.Context())
 	if !ok {
@@ -204,6 +205,13 @@ func (h *MemberHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	callerRole, ok := middleware.RoleFromContext(r.Context())
+	if !ok {
+		h.logger.Error("member: no caller role in context; Authz must run before this handler")
+		h.writeInternalError(w)
+		return
+	}
+
 	raw := r.URL.Query().Get("version")
 	version, err := strconv.Atoi(raw)
 	if raw == "" || err != nil || version <= 0 {
@@ -212,7 +220,7 @@ func (h *MemberHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.RemoveMember(r.Context(), actor.ID, eventID, memberID, version); err != nil {
-		h.writeAssignOrRemoveError(w, "member: removing", eventID, memberID, err)
+		h.writeAssignOrRemoveError(w, r.Context(), callerRole, "member: removing", eventID, memberID, err)
 		return
 	}
 
@@ -223,13 +231,28 @@ func (h *MemberHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 // vocabulary: ErrConflict here always means the last-admin guard blocked a
 // state-changing write, distinct from CreateMember's use of the same
 // sentinel for "already a member" -- a state conflict, not a permission
-// failure, so 409 not 403.
-func (h *MemberHandler) writeAssignOrRemoveError(w http.ResponseWriter, logMsg, eventID, memberID string, err error) {
+// failure, so 409 not 403. ErrVersionMismatch (item 17) embeds the
+// member's current state under details.current, same as
+// event.go/room.go/session.go's equivalent -- callerRole is needed because
+// response.NewMemberResponse is role-shaped (item 10).
+func (h *MemberHandler) writeAssignOrRemoveError(w http.ResponseWriter, ctx context.Context, callerRole, logMsg, eventID, memberID string, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		h.writeError(w, http.StatusNotFound, "not_found", "no such member")
 	case errors.Is(err, domain.ErrVersionMismatch):
-		h.writeError(w, http.StatusConflict, "version_conflict", "the member was modified by someone else; reload and retry")
+		details := map[string]any{"current": nil}
+		switch current, getErr := h.service.GetMember(ctx, eventID, memberID); {
+		case getErr == nil:
+			details["current"] = response.NewMemberResponse(current, callerRole)
+		case errors.Is(getErr, domain.ErrNotFound):
+			// Winning writer removed the member between the failed write
+			// and this re-fetch -- expected, not a bug. Stays explicitly null.
+		default:
+			h.logger.Error("member: fetching current state after version conflict", "event_id", eventID, "member_id", memberID, "error", getErr)
+		}
+		if writeErr := response.WriteError(w, http.StatusConflict, "version_conflict", "the member was modified by someone else; reload and retry", details); writeErr != nil {
+			h.logger.Error("member: writing error envelope", "error", writeErr)
+		}
 	case errors.Is(err, domain.ErrConflict):
 		h.writeError(w, http.StatusConflict, "last_admin", "this event must always have at least one admin")
 	default:
