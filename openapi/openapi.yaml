@@ -1334,6 +1334,17 @@ components:
         updated_at:
           type: string
           format: date-time
+        room_name:
+          type: string
+          description: >
+            Present only on GET (list) rows (item 18) -- batched via a
+            single JOIN so query count stays constant regardless of page
+            size, never a per-row lookup. Absent (not null) on create/get
+            single/update responses and on a version-conflict's
+            details.current.
+        speaker_name:
+          type: string
+          description: Present only on GET (list) rows -- see room_name.
 
     SessionList:
       type: object

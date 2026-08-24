@@ -305,11 +305,17 @@ type Session struct {
 	EventId         openapi_types.UUID `json:"event_id"`
 	Id              openapi_types.UUID `json:"id"`
 	RoomId          openapi_types.UUID `json:"room_id"`
-	SpeakerId       openapi_types.UUID `json:"speaker_id"`
-	StartsAt        time.Time          `json:"starts_at"`
-	Title           string             `json:"title"`
-	UpdatedAt       time.Time          `json:"updated_at"`
-	Version         int                `json:"version"`
+
+	// RoomName Present only on GET (list) rows (item 18) -- batched via a single JOIN so query count stays constant regardless of page size, never a per-row lookup. Absent (not null) on create/get single/update responses and on a version-conflict's details.current.
+	RoomName  *string            `json:"room_name,omitempty"`
+	SpeakerId openapi_types.UUID `json:"speaker_id"`
+
+	// SpeakerName Present only on GET (list) rows -- see room_name.
+	SpeakerName *string   `json:"speaker_name,omitempty"`
+	StartsAt    time.Time `json:"starts_at"`
+	Title       string    `json:"title"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
 }
 
 // SessionCreateRequest defines model for SessionCreateRequest.

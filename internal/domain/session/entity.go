@@ -23,4 +23,13 @@ type Session struct {
 	Version     int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+
+	// RoomName/SpeakerName are populated by Repository.List only (item 18)
+	// -- a single JOIN against rooms/users keeps List's query count
+	// constant regardless of result size, batching what would otherwise be
+	// a per-row lookup. Get/Create/Update/Delete leave these "" since none
+	// of them has an N+1 to avoid; the http/response presenter uses that
+	// to decide whether to surface room_name/speaker_name at all.
+	RoomName    string
+	SpeakerName string
 }

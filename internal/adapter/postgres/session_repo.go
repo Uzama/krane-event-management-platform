@@ -162,19 +162,29 @@ func (r *SessionRepository) Get(ctx context.Context, eventID, sessionID string) 
 // List returns eventID's live sessions, ordered by (created_at, id) --
 // never OFFSET. It fetches one extra row to decide whether a further page
 // exists, then trims it before returning, matching room_repo.go's List.
+//
+// Item 18: room_name/speaker_name are batched via a single JOIN against
+// rooms/users in this same query, not a per-row lookup -- the query count
+// for this call is exactly 1 whether the page holds 1 session or the
+// limit's maximum, matching member_repo.go's List precedent (it already
+// joins users for email/name the same way).
 func (r *SessionRepository) List(ctx context.Context, eventID string, limit int, after *session.Cursor) (session.Page, error) {
 	const baseQuery = `
-		SELECT id, event_id, room_id, speaker_id, title, description,
-		       lower(time_range), upper(time_range), version, created_at, updated_at
-		FROM sessions WHERE event_id = $1 AND deleted_at IS NULL`
+		SELECT s.id, s.event_id, s.room_id, s.speaker_id, s.title, s.description,
+		       lower(s.time_range), upper(s.time_range), s.version, s.created_at, s.updated_at,
+		       rm.name, spk.name
+		FROM sessions s
+		JOIN rooms rm ON rm.id = s.room_id
+		JOIN users spk ON spk.id = s.speaker_id
+		WHERE s.event_id = $1 AND s.deleted_at IS NULL`
 
 	var rows pgx.Rows
 	var err error
 	if after == nil {
-		rows, err = r.pool.Query(ctx, baseQuery+` ORDER BY created_at, id LIMIT $2`, eventID, limit+1)
+		rows, err = r.pool.Query(ctx, baseQuery+` ORDER BY s.created_at, s.id LIMIT $2`, eventID, limit+1)
 	} else {
 		rows, err = r.pool.Query(ctx,
-			baseQuery+` AND (created_at, id) > ($2, $3) ORDER BY created_at, id LIMIT $4`,
+			baseQuery+` AND (s.created_at, s.id) > ($2, $3) ORDER BY s.created_at, s.id LIMIT $4`,
 			eventID, after.CreatedAt, after.ID, limit+1)
 	}
 	if err != nil {
@@ -186,7 +196,8 @@ func (r *SessionRepository) List(ctx context.Context, eventID string, limit int,
 	for rows.Next() {
 		var s session.Session
 		if err := rows.Scan(&s.ID, &s.EventID, &s.RoomID, &s.SpeakerID, &s.Title, &s.Description,
-			&s.StartsAt, &s.EndsAt, &s.Version, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			&s.StartsAt, &s.EndsAt, &s.Version, &s.CreatedAt, &s.UpdatedAt,
+			&s.RoomName, &s.SpeakerName); err != nil {
 			return session.Page{}, fmt.Errorf("scanning session: %w", err)
 		}
 		sessions = append(sessions, s)

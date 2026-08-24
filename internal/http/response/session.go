@@ -25,6 +25,14 @@ type SessionResponse struct {
 	Version         int       `json:"version"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+
+	// RoomName/SpeakerName (item 18) are populated only when s.RoomName/
+	// s.SpeakerName are non-empty -- true for a List row (batched via a
+	// JOIN, session.Repository.List), never true for Get/Create/Update/a
+	// version-conflict's details.current, so those omit the fields
+	// entirely (omitempty) rather than emit a misleading "".
+	RoomName    *string `json:"room_name,omitempty"`
+	SpeakerName *string `json:"speaker_name,omitempty"`
 }
 
 // NewSessionResponse takes an already-loaded *time.Location, never a
@@ -37,7 +45,7 @@ type SessionResponse struct {
 // across a transition gives the wrong answer, which is exactly the bug
 // FEATURES.md item 12's DST must-test exists to catch.
 func NewSessionResponse(s session.Session, loc *time.Location) SessionResponse {
-	return SessionResponse{
+	resp := SessionResponse{
 		ID:              s.ID,
 		EventID:         s.EventID,
 		RoomID:          s.RoomID,
@@ -51,6 +59,13 @@ func NewSessionResponse(s session.Session, loc *time.Location) SessionResponse {
 		CreatedAt:       s.CreatedAt,
 		UpdatedAt:       s.UpdatedAt,
 	}
+	if s.RoomName != "" {
+		resp.RoomName = &s.RoomName
+	}
+	if s.SpeakerName != "" {
+		resp.SpeakerName = &s.SpeakerName
+	}
+	return resp
 }
 
 // SessionListResponse is GET /v1/events/{eventId}/sessions' envelope.
