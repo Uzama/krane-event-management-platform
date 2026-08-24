@@ -25,8 +25,15 @@ jobs:
       - name: Lint
         run: make lint
 
+      # Fails fast, before paying for the Docker/Postgres stack below, if the
+      # committed spec or generated code has drifted from openapi/openapi.yaml.
+      - name: Contract check
+        run: make contract-check
+
       # `make test` runs `make up` itself, so this brings the whole stack up on
-      # the runner's Docker and migrates a fresh throwaway database.
+      # the runner's Docker and migrates a fresh throwaway database. It also
+      # runs the router/validator tests that prove the server's live
+      # responses actually honour the OpenAPI contract.
       - name: Test
         run: make test
 

@@ -48,7 +48,7 @@ GOLANGCI_LINT_IMAGE := golangci/golangci-lint:v1.62.2-alpine
 OIDC_DISCOVERY := http://localhost:$(OIDC_PORT)/default/.well-known/openid-configuration
 
 .DEFAULT_GOAL := help
-.PHONY: help up down seed test lint migrate-up migrate-down psql guard-production-credentials wait-oidc
+.PHONY: help up down seed test lint generate contract-check migrate-up migrate-down psql guard-production-credentials wait-oidc
 
 help: ## Show the available targets
 	@echo "Event Management Platform"
@@ -98,6 +98,22 @@ lint: ## gofmt + go vet + golangci-lint (pinned image, no host install)
 		-v krane-golangci-cache:/root/.cache \
 		-v krane-gomod-cache:/go/pkg/mod \
 		-w /app $(GOLANGCI_LINT_IMAGE) golangci-lint run
+
+## ---------------------------------------------------------------------------
+## OpenAPI contract (item 05)
+## ---------------------------------------------------------------------------
+
+generate: ## Regenerate internal/http/gen from openapi/openapi.yaml
+	@./scripts/require-go.sh
+	go generate ./...
+
+contract-check: generate ## Fail if the spec or generated code has drifted
+	@if ! git diff --exit-code -- internal/http/gen openapi >/dev/null; then \
+		echo "contract-check: internal/http/gen or openapi/ changed after regenerating." >&2; \
+		echo "The committed spec/generated code is out of date -- run 'make generate' and commit the result." >&2; \
+		git diff -- internal/http/gen openapi >&2; \
+		exit 1; \
+	fi
 
 ## ---------------------------------------------------------------------------
 ## Helpers
