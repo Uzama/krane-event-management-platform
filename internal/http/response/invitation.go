@@ -44,6 +44,29 @@ type InvitationListResponse struct {
 	NextCursor *string              `json:"next_cursor,omitempty"`
 }
 
+// BulkInviteItemResponse is one item's outcome in a bulk invite's 207 body
+// (item 21). InvitationID is omitted entirely (not merely null) unless
+// Status is "created" -- omitempty, matching SessionResponse's
+// RoomName/SpeakerName precedent for "this field only sometimes applies."
+type BulkInviteItemResponse struct {
+	Email        string  `json:"email"`
+	Status       string  `json:"status"`
+	InvitationID *string `json:"invitation_id,omitempty"`
+}
+
+// BulkInviteResponse is POST .../invitations/bulk's 207 envelope.
+type BulkInviteResponse struct {
+	Results []BulkInviteItemResponse `json:"results"`
+}
+
+func NewBulkInviteResponse(result invitation.BulkResult) BulkInviteResponse {
+	items := make([]BulkInviteItemResponse, len(result.Items))
+	for i, r := range result.Items {
+		items[i] = BulkInviteItemResponse{Email: r.Email, Status: r.Status, InvitationID: r.InvitationID}
+	}
+	return BulkInviteResponse{Results: items}
+}
+
 func NewInvitationListResponse(page invitation.Page) InvitationListResponse {
 	data := make([]InvitationResponse, len(page.Invitations))
 	for i, inv := range page.Invitations {

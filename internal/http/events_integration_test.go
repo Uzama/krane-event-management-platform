@@ -158,10 +158,11 @@ func seedEventsITMember(t *testing.T, pool *pgxpool.Pool, eventID, subject, role
 }
 
 type eventsITRequest struct {
-	method string
-	path   string
-	bearer string
-	body   string // empty means no body
+	method         string
+	path           string
+	bearer         string
+	body           string // empty means no body
+	idempotencyKey string // item 21: set as the Idempotency-Key header when non-empty
 }
 
 type eventsITResponse struct {
@@ -189,6 +190,9 @@ func doEventsITRequest(t *testing.T, srv *httptest.Server, r eventsITRequest) ev
 	}
 	if r.body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if r.idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", r.idempotencyKey)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -232,6 +236,31 @@ func assertSpec(t *testing.T, spec *openapi3.T, method, path, reqBody string, st
 	if reqBody != "" {
 		validationReq.Header.Set("Content-Type", "application/json")
 	}
+
+	if err := validator.ValidateRequest(context.Background(), spec, validationReq); err != nil {
+		t.Errorf("ValidateRequest(%s %s): %v", method, path, err)
+	}
+	if err := validator.ValidateResponse(context.Background(), spec, validationReq, status, header, respBody); err != nil {
+		t.Errorf("ValidateResponse(%s %s, status %d): %v\nbody: %s", method, path, status, err, respBody)
+	}
+}
+
+// assertSpecWithIdempotencyKey is assertSpec plus the Idempotency-Key
+// header (item 21) -- POST .../invitations/bulk declares it required, so
+// the validation-only request assertSpec builds needs it set too, or
+// kin-openapi rejects the request itself before it ever checks the body.
+func assertSpecWithIdempotencyKey(t *testing.T, spec *openapi3.T, method, path, reqBody, idempotencyKey string, status int, header http.Header, respBody []byte) {
+	t.Helper()
+
+	var bodyReader io.Reader
+	if reqBody != "" {
+		bodyReader = bytes.NewReader([]byte(reqBody))
+	}
+	validationReq := httptest.NewRequest(method, path, bodyReader)
+	if reqBody != "" {
+		validationReq.Header.Set("Content-Type", "application/json")
+	}
+	validationReq.Header.Set("Idempotency-Key", idempotencyKey)
 
 	if err := validator.ValidateRequest(context.Background(), spec, validationReq); err != nil {
 		t.Errorf("ValidateRequest(%s %s): %v", method, path, err)

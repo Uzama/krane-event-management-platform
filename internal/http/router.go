@@ -115,6 +115,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	mux.Handle("POST /v1/events/{eventId}/invitations", auth(authzForInvitation(domainauthz.ActionCreate)(http.HandlerFunc(deps.Invitation.CreateInvitation))))
 	mux.Handle("GET /v1/events/{eventId}/invitations", auth(authzForInvitation(domainauthz.ActionRead)(http.HandlerFunc(deps.Invitation.ListInvitations))))
+	mux.Handle("POST /v1/events/{eventId}/invitations/bulk", auth(authzForInvitation(domainauthz.ActionCreate)(http.HandlerFunc(deps.Invitation.BulkCreateInvitations))))
 
 	return mux
 }

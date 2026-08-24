@@ -261,3 +261,110 @@ func TestInvitationsIntegration_NoToken_Returns401(t *testing.T) {
 		t.Fatalf("got status %d, want 401: %s", resp.status, resp.body)
 	}
 }
+
+// TestInvitationsIntegration_BulkInvite_MixedResultsAndRetryReplays is
+// item 21's full-stack proof, against the real production router, the
+// real mock OIDC issuer, and real Postgres: a batch of one new email and
+// one already-invited email returns 207 with both outcomes, matches the
+// OpenAPI contract, and a retry with the same Idempotency-Key and body
+// replays the identical body without creating any new rows.
+func TestInvitationsIntegration_BulkInvite_MixedResultsAndRetryReplays(t *testing.T) {
+	srv, pool := newInvitationsServer(t)
+	spec := loadEventsITSpec(t)
+	eventID, adminToken := createInvitationsITEvent(t, srv)
+
+	alreadyInvited := eventsITUniqueSubject(t) + "-dup@example.com"
+	seedBody := `{"email":"` + alreadyInvited + `","role":"attendee"}`
+	if resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events/" + eventID + "/invitations", bearer: adminToken, body: seedBody}); resp.status != http.StatusCreated {
+		t.Fatalf("seeding pre-existing invitation: got status %d, want 201: %s", resp.status, resp.body)
+	}
+
+	newEmail := eventsITUniqueSubject(t) + "-new@example.com"
+	bulkBody := `{"invitations":[{"email":"` + newEmail + `","role":"attendee"},{"email":"` + alreadyInvited + `","role":"attendee"}]}`
+	path := "/v1/events/" + eventID + "/invitations/bulk"
+	idempotencyKey := "bulk-key-" + eventsITUniqueSubject(t)
+
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: path, bearer: adminToken, body: bulkBody, idempotencyKey: idempotencyKey})
+	if resp.status != http.StatusMultiStatus {
+		t.Fatalf("first bulk invite: got status %d, want 207: %s", resp.status, resp.body)
+	}
+	assertSpecWithIdempotencyKey(t, spec, http.MethodPost, path, bulkBody, idempotencyKey, resp.status, resp.header, resp.body)
+
+	var first struct {
+		Results []struct {
+			Email        string  `json:"email"`
+			Status       string  `json:"status"`
+			InvitationID *string `json:"invitation_id"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(resp.body, &first); err != nil {
+		t.Fatalf("decoding first response: %v", err)
+	}
+	if len(first.Results) != 2 || first.Results[0].Status != "created" || first.Results[1].Status != "conflict" {
+		t.Fatalf("got %+v, want [created, conflict]", first.Results)
+	}
+
+	var countBefore int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM invitations WHERE event_id = $1`, eventID).Scan(&countBefore); err != nil {
+		t.Fatalf("counting invitations: %v", err)
+	}
+
+	// The actual retry: same Idempotency-Key, same body as the first call.
+	retryResp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: path, bearer: adminToken, body: bulkBody, idempotencyKey: idempotencyKey})
+	if retryResp.status != http.StatusMultiStatus {
+		t.Fatalf("retry: got status %d, want 207: %s", retryResp.status, retryResp.body)
+	}
+	if string(retryResp.body) != string(resp.body) {
+		t.Fatalf("retry body differs from the original:\nfirst: %s\nretry: %s", resp.body, retryResp.body)
+	}
+
+	var countAfter int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM invitations WHERE event_id = $1`, eventID).Scan(&countAfter); err != nil {
+		t.Fatalf("counting invitations: %v", err)
+	}
+	if countAfter != countBefore {
+		t.Fatalf("invitation count changed after the retry: %d -> %d, want unchanged", countBefore, countAfter)
+	}
+}
+
+func TestInvitationsIntegration_BulkInvite_MissingIdempotencyKey_Returns422(t *testing.T) {
+	srv, _ := newInvitationsServer(t)
+	eventID, adminToken := createInvitationsITEvent(t, srv)
+
+	body := `{"invitations":[{"email":"` + eventsITUniqueSubject(t) + `@example.com","role":"attendee"}]}`
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events/" + eventID + "/invitations/bulk", bearer: adminToken, body: body})
+	if resp.status != http.StatusUnprocessableEntity {
+		t.Fatalf("got status %d, want 422: %s", resp.status, resp.body)
+	}
+}
+
+// TestInvitationsIntegration_BulkInvite_ContributorForbiddenOnOneItem
+// proves item 21's requirement (a) at the full stack: the per-item
+// escalation guard runs for each item independently, even for a caller
+// who IS allowed through Authz (contributor has invitation:create) but
+// is only allowed to invite at attendee.
+func TestInvitationsIntegration_BulkInvite_ContributorForbiddenOnOneItem(t *testing.T) {
+	srv, pool := newInvitationsServer(t)
+	eventID, _ := createInvitationsITEvent(t, srv)
+
+	contributorSub := eventsITUniqueSubject(t)
+	seedEventsITMember(t, pool, eventID, contributorSub, "contributor")
+	contributorToken := mintEventsITToken(t, contributorSub)
+
+	body := `{"invitations":[{"email":"` + eventsITUniqueSubject(t) + `-a@example.com","role":"attendee"},{"email":"` + eventsITUniqueSubject(t) + `-b@example.com","role":"admin"}]}`
+	resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events/" + eventID + "/invitations/bulk", bearer: contributorToken, body: body, idempotencyKey: "key-" + eventsITUniqueSubject(t)})
+	if resp.status != http.StatusMultiStatus {
+		t.Fatalf("got status %d, want 207: %s", resp.status, resp.body)
+	}
+	var got struct {
+		Results []struct {
+			Status string `json:"status"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(resp.body, &got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(got.Results) != 2 || got.Results[0].Status != "created" || got.Results[1].Status != "forbidden" {
+		t.Fatalf("got %+v, want [created, forbidden] -- a contributor must be forbidden from the admin-role item even inside a batch", got.Results)
+	}
+}

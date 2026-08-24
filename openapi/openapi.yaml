@@ -897,6 +897,66 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/invitations/bulk:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: bulkCreateInvitations
+      summary: Invite several people to an event, idempotently
+      description: >
+        Item 21. Requires an Idempotency-Key header. Each item is invited
+        through the exact same escalation-guarded, audited write as POST
+        .../invitations, one at a time -- a partial failure (one email
+        already invited, one role the caller can't grant) never fails the
+        whole batch; every item gets its own result in the 207 body. A
+        retry with the same Idempotency-Key and an identical body replays
+        the stored result verbatim, never reprocessing the items or
+        re-checking current state (so a result stays "created" even if the
+        caller's own role has since changed). A retry with the same key
+        but a different body is rejected outright (422
+        idempotency_key_conflict) -- never silently replayed, never
+        silently reprocessed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkInviteRequest"
+      responses:
+        "207":
+          description: Per-item results -- see BulkInviteResponse. Always 207, even when every item succeeded or every item failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkInviteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >
+            Either the request body failed shape validation (missing
+            Idempotency-Key, empty invitations list, a malformed item), or
+            this Idempotency-Key was already used with a different request
+            body (idempotency_key_conflict).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1504,3 +1564,45 @@ components:
         role:
           type: string
           enum: [admin, contributor, attendee]
+
+    # internal/http/request/invitation.go's BulkInviteRequest.
+    BulkInviteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - invitations
+      properties:
+        invitations:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/InvitationCreateRequest"
+
+    BulkInviteItemResult:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - status
+      properties:
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [created, conflict, forbidden]
+        invitation_id:
+          type: string
+          format: uuid
+          description: Present only when status is "created".
+
+    BulkInviteResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkInviteItemResult"

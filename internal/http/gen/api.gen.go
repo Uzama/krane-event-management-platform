@@ -19,6 +19,27 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for BulkInviteItemResultStatus.
+const (
+	BulkInviteItemResultStatusConflict  BulkInviteItemResultStatus = "conflict"
+	BulkInviteItemResultStatusCreated   BulkInviteItemResultStatus = "created"
+	BulkInviteItemResultStatusForbidden BulkInviteItemResultStatus = "forbidden"
+)
+
+// Valid indicates whether the value is a known member of the BulkInviteItemResultStatus enum.
+func (e BulkInviteItemResultStatus) Valid() bool {
+	switch e {
+	case BulkInviteItemResultStatusConflict:
+		return true
+	case BulkInviteItemResultStatusCreated:
+		return true
+	case BulkInviteItemResultStatusForbidden:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationRole.
 const (
 	InvitationRoleAdmin       InvitationRole = "admin"
@@ -122,6 +143,28 @@ func (e MemberCreateRequestRole) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// BulkInviteItemResult defines model for BulkInviteItemResult.
+type BulkInviteItemResult struct {
+	Email openapi_types.Email `json:"email"`
+
+	// InvitationId Present only when status is "created".
+	InvitationId *openapi_types.UUID        `json:"invitation_id,omitempty"`
+	Status       BulkInviteItemResultStatus `json:"status"`
+}
+
+// BulkInviteItemResultStatus defines model for BulkInviteItemResult.Status.
+type BulkInviteItemResultStatus string
+
+// BulkInviteRequest defines model for BulkInviteRequest.
+type BulkInviteRequest struct {
+	Invitations []InvitationCreateRequest `json:"invitations"`
+}
+
+// BulkInviteResponse defines model for BulkInviteResponse.
+type BulkInviteResponse struct {
+	Results []BulkInviteItemResult `json:"results"`
 }
 
 // ErrorEnvelope defines model for ErrorEnvelope.
@@ -395,6 +438,11 @@ type ListInvitationsParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// BulkCreateInvitationsParams defines parameters for BulkCreateInvitations.
+type BulkCreateInvitationsParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -443,6 +491,9 @@ type PatchEventJSONRequestBody = EventPatchRequest
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreateRequest
 
+// BulkCreateInvitationsJSONRequestBody defines body for BulkCreateInvitations for application/json ContentType.
+type BulkCreateInvitationsJSONRequestBody = BulkInviteRequest
+
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = MemberCreateRequest
 
@@ -487,6 +538,9 @@ type ServerInterface interface {
 	// Invite someone to an event
 	// (POST /v1/events/{eventId}/invitations)
 	CreateInvitation(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Invite several people to an event, idempotently
+	// (POST /v1/events/{eventId}/invitations/bulk)
+	BulkCreateInvitations(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params BulkCreateInvitationsParams)
 	// List an event's roster
 	// (GET /v1/events/{eventId}/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListMembersParams)
@@ -798,6 +852,65 @@ func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateInvitation(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BulkCreateInvitations operation middleware
+func (siw *ServerInterfaceWrapper) BulkCreateInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BulkCreateInvitationsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkCreateInvitations(w, r, eventId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1552,6 +1665,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}", wrapper.PatchEvent)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.ListInvitations)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/invitations/bulk", wrapper.BulkCreateInvitations)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.ListMembers)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.CreateMember)
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.RemoveMember)

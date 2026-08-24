@@ -28,6 +28,27 @@ type Page struct {
 	NextCursor  *Cursor
 }
 
+// BulkItemResult is one item's outcome from a BulkCreate call -- item 21.
+// Status is one of "created" (InvitationID set), "conflict" (that email
+// already has an invitation on this event), or "forbidden" (actorID
+// cannot invite at that role) -- the exact same per-item outcomes a
+// single Create call can produce, just collected rather than returned as
+// an error that would abort the whole batch.
+type BulkItemResult struct {
+	Email        string
+	Status       string
+	InvitationID *string
+}
+
+// BulkResult is BulkCreate's return value. Replayed is true when this
+// result came from a stored idempotency_keys row (a retry), never
+// recomputed against current state -- Items is byte-for-byte the same
+// decision the first request made, even if the world has since changed.
+type BulkResult struct {
+	Items    []BulkItemResult
+	Replayed bool
+}
+
 // Repository is implemented by adapter/postgres. Every write is one
 // transaction: the row mutation and its audit_log row commit or roll back
 // together, never a check-then-act SELECT beforehand.
@@ -50,4 +71,19 @@ type Repository interface {
 	// List returns eventID's invitations, ordered by (created_at, id),
 	// starting after the given cursor.
 	List(ctx context.Context, eventID string, limit int, after *Cursor) (Page, error)
+
+	// BulkCreate invites every item in items to eventID, honouring
+	// idempotencyKey (item 21): a first call with a given (actorID, key)
+	// processes items one by one -- each through the exact same atomic,
+	// escalation-guarded, audited write Create uses (never a raw
+	// multi-row INSERT, which would bypass the per-item guard) -- then
+	// records the result keyed on (actorID, idempotencyKey). A retry with
+	// the same key and the same requestHash replays that stored result
+	// verbatim (BulkResult.Replayed == true), never reprocessing the
+	// items or re-checking current state. A retry with the same key but a
+	// different requestHash (a caller reusing a key for a different
+	// request) returns ErrConflict -- the one case this call can fail
+	// outright, since every per-item outcome for a fresh request is
+	// always a BulkItemResult, never a top-level error.
+	BulkCreate(ctx context.Context, actorID, eventID, idempotencyKey, requestHash string, items []CreateInput) (BulkResult, error)
 }
