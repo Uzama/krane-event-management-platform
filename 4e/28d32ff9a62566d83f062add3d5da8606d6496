@@ -1,0 +1,55 @@
+FAILURES.md
+  s_5b5042de85f917::t_cc9c7a1940986a 15-16
+cmd/seed/load.go
+  s_5b5042de85f917::t_f30d989510fdbd 10-11
+  s_5b5042de85f917::t_1b7b0395893563 1-9,12-132,134-145,147-168
+  s_5b5042de85f917::t_239dc01eca99b1 133,146
+cmd/seed/demo.go
+  s_5b5042de85f917::t_0cf6021ed2d2ce 1-35
+cmd/seed/load_test.go
+  s_5b5042de85f917::t_2071f8d4594dd4 88,116,124,153
+  s_5b5042de85f917::t_726149e7deb77e 1-11,23-52,54-87,89-115,117-123,125-152,154-190
+  s_5b5042de85f917::t_c5c648cd2bd096 53
+  s_5b5042de85f917::t_a9b96bb3e90db9 12-22
+cmd/seed/uuidv7.go
+  s_5b5042de85f917::t_72313f8a83bec4 1-37
+cmd/seed/uuidv7_test.go
+  s_5b5042de85f917::t_e1b407a5af5820 1-40
+FEATURES.md
+  s_5b5042de85f917::t_3276dd66bf7f03 31
+cmd/seed/generate_test.go
+  s_5b5042de85f917::t_5a32ce63c381ce 1-13,15-29,31-42,44-59,61-109,111-149,151-192,194-231,234-261
+  s_5b5042de85f917::t_359c6e91ea4bc4 14,30,43,60,110,150,193,232-233
+cmd/seed/main.go
+  s_5b5042de85f917::t_f3e8c9473dd89f 6-172
+  s_5b5042de85f917::t_52edc1b0262942 1-5
+AUDIT.md
+  s_5b5042de85f917::t_479481a8b30956 265-282
+cmd/seed/generate.go
+  s_5b5042de85f917::t_fd717eea0bdda0 1-29,36-313,322,329-384,386-511
+  s_5b5042de85f917::t_c6b1a991d3f79f 314-321,323-328
+  s_5b5042de85f917::t_772038f5ce49a5 385
+  s_5b5042de85f917::t_948f208b1acda5 30-35
+Makefile
+  s_5b5042de85f917::t_480346d3971519 48-54,56
+  s_5b5042de85f917::t_f15e3740277b49 90-92
+  s_5b5042de85f917::t_593da15c2ca166 102-106
+  s_5b5042de85f917::t_70ce582203ea6a 55
+  s_5b5042de85f917::t_4d697b27fc5e54 24-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "4e28d32ff9a62566d83f062add3d5da8606d6496",
+  "prompts": {},
+  "sessions": {
+    "s_5b5042de85f917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a35a08d7-6cb1-48b0-9c2e-95c56476e861",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
