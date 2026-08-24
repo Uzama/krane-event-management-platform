@@ -1,0 +1,24 @@
+AUDIT.md
+  s_f76373887302cf::t_8a65ad1a85df19 339-352
+internal/adapter/postgres/invitation_pagination_test.go
+  s_f76373887302cf::t_bf219ab5f4b182 114-121
+  s_f76373887302cf::t_9191bde0de237e 1-113,122-173
+FEATURES.md
+  s_f76373887302cf::t_4f872fd1be31f8 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "c1d94051be8a80f4ef3d910db625b093fa7dc91e",
+  "prompts": {},
+  "sessions": {
+    "s_f76373887302cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd3befaf-c6ad-4ab6-88d8-dec1b8de0b55",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
