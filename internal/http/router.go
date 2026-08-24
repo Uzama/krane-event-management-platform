@@ -108,6 +108,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 	mux.Handle("DELETE /v1/events/{eventId}/rooms/{roomId}", auth(authzForRoom(domainauthz.ActionDelete)(http.HandlerFunc(deps.Room.DeleteRoom))))
 
 	mux.Handle("POST /v1/events/{eventId}/sessions", auth(authzForSession(domainauthz.ActionCreate)(http.HandlerFunc(deps.Session.CreateSession))))
+	mux.Handle("POST /v1/events/{eventId}/sessions/series", auth(authzForSession(domainauthz.ActionCreate)(http.HandlerFunc(deps.Session.CreateSeries))))
 	mux.Handle("GET /v1/events/{eventId}/sessions", auth(authzForSession(domainauthz.ActionRead)(http.HandlerFunc(deps.Session.ListSessions))))
 	mux.Handle("GET /v1/events/{eventId}/sessions/{sessionId}", auth(authzForSession(domainauthz.ActionRead)(http.HandlerFunc(deps.Session.GetSession))))
 	mux.Handle("PATCH /v1/events/{eventId}/sessions/{sessionId}", auth(authzForSession(domainauthz.ActionUpdate)(http.HandlerFunc(deps.Session.PatchSession))))

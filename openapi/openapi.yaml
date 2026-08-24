@@ -680,6 +680,57 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/sessions/series:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createSessionSeries
+      summary: Create a recurring series of sessions
+      description: >
+        Item 23 (go-further pick), deliberately scoped small -- see
+        TRADEOFFS.md for what was cut (lazy materialize-on-read, RRULE
+        shapes beyond daily/weekly). Every occurrence is materialized
+        immediately as an ordinary session, through the exact same write
+        POST .../sessions uses -- each is independently subject to the
+        room/speaker EXCLUDE (item 16), so a conflict on one occurrence is
+        a per-item "conflict" result, not a whole-series failure. Editing
+        or cancelling one occurrence afterward is a normal PATCH/DELETE on
+        that session; it is recorded in a history table, but the session
+        itself is never distinguished from a standalone one by any other
+        route.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeriesCreateRequest"
+      responses:
+        "201":
+          description: The series and every occurrence's result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Series"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: room_id doesn't reference a room in this event, or speaker_id doesn't reference an existing user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /v1/events/{eventId}/sessions/{sessionId}:
     parameters:
       - name: eventId
@@ -1460,6 +1511,113 @@ components:
         ends_at:
           type: string
           description: Same format as starts_at. Must resolve to an instant after starts_at.
+
+    # internal/http/request/session.go's SeriesCreateRequest (item 23).
+    SeriesCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - room_id
+        - speaker_id
+        - title
+        - first_starts_at
+        - first_ends_at
+        - freq
+        - interval_count
+        - occurrences
+      properties:
+        room_id:
+          type: string
+          format: uuid
+        speaker_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        first_starts_at:
+          type: string
+          description: The first occurrence's local wall-clock start -- same format as SessionCreateRequest.starts_at.
+        first_ends_at:
+          type: string
+          description: The first occurrence's local wall-clock end. Every later occurrence keeps this same duration.
+        freq:
+          type: string
+          enum: [daily, weekly]
+        interval_count:
+          type: integer
+          minimum: 1
+          description: e.g. freq=weekly, interval_count=2 -> every other week.
+        occurrences:
+          type: integer
+          minimum: 1
+          maximum: 52
+
+    SeriesOccurrenceResult:
+      type: object
+      additionalProperties: false
+      required:
+        - starts_at
+        - status
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [created, conflict]
+          description: conflict means item 16's EXCLUDE rejected this occurrence -- the room or speaker was already booked at that instant. This occurrence is simply not materialized; the rest of the series is unaffected.
+        session_id:
+          type: string
+          format: uuid
+          description: Present only when status is "created".
+
+    Series:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - event_id
+        - room_id
+        - speaker_id
+        - title
+        - description
+        - freq
+        - interval_count
+        - occurrences
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        speaker_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        freq:
+          type: string
+          enum: [daily, weekly]
+        interval_count:
+          type: integer
+        occurrences:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeriesOccurrenceResult"
+        created_at:
+          type: string
+          format: date-time
 
     # internal/http/request/session.go's PatchSessionRequest. room_id/
     # speaker_id are deliberately absent from this schema, not merely

@@ -40,6 +40,7 @@ type sessionRow struct {
 	Version     int       `json:"version"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	SeriesID    *string   `json:"series_id"`
 }
 
 func (r sessionRow) toSession() session.Session {
@@ -55,6 +56,7 @@ func (r sessionRow) toSession() session.Session {
 		Version:     r.Version,
 		CreatedAt:   r.CreatedAt,
 		UpdatedAt:   r.UpdatedAt,
+		SeriesID:    r.SeriesID,
 	}
 }
 
@@ -85,18 +87,18 @@ func (r *SessionRepository) Create(ctx context.Context, actorID, eventID string,
 
 	const insert = `
 		WITH new_session AS (
-			INSERT INTO sessions (event_id, room_id, speaker_id, title, description, time_range)
-			SELECT $1, rm.id, $3, $4, $5, tstzrange($6, $7, '[)')
+			INSERT INTO sessions (event_id, room_id, speaker_id, title, description, time_range, series_id)
+			SELECT $1, rm.id, $3, $4, $5, tstzrange($6, $7, '[)'), $8
 			FROM rooms rm
 			WHERE rm.id = $2 AND rm.event_id = $1
 			RETURNING id, event_id, room_id, speaker_id, title, description,
 			          lower(time_range) AS starts_at, upper(time_range) AS ends_at,
-			          version, created_at, updated_at
+			          version, created_at, updated_at, series_id
 		)
 		SELECT (SELECT row_to_json(new_session) FROM new_session)`
 
 	var sessionJSON []byte
-	err = tx.QueryRow(ctx, insert, eventID, in.RoomID, in.SpeakerID, in.Title, in.Description, in.StartsAt, in.EndsAt).
+	err = tx.QueryRow(ctx, insert, eventID, in.RoomID, in.SpeakerID, in.Title, in.Description, in.StartsAt, in.EndsAt, in.SeriesID).
 		Scan(&sessionJSON)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -142,13 +144,13 @@ func (r *SessionRepository) Create(ctx context.Context, actorID, eventID string,
 func (r *SessionRepository) Get(ctx context.Context, eventID, sessionID string) (session.Session, error) {
 	const q = `
 		SELECT id, event_id, room_id, speaker_id, title, description,
-		       lower(time_range), upper(time_range), version, created_at, updated_at
+		       lower(time_range), upper(time_range), version, created_at, updated_at, series_id
 		FROM sessions WHERE id = $1 AND event_id = $2 AND deleted_at IS NULL`
 
 	var s session.Session
 	err := r.pool.QueryRow(ctx, q, sessionID, eventID).Scan(
 		&s.ID, &s.EventID, &s.RoomID, &s.SpeakerID, &s.Title, &s.Description,
-		&s.StartsAt, &s.EndsAt, &s.Version, &s.CreatedAt, &s.UpdatedAt,
+		&s.StartsAt, &s.EndsAt, &s.Version, &s.CreatedAt, &s.UpdatedAt, &s.SeriesID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -228,6 +230,10 @@ func sessionReturningColumns() []interface{} {
 		goqu.L("lower(time_range)").As("starts_at"), goqu.L("upper(time_range)").As("ends_at"),
 		goqu.C("version"), goqu.C("created_at"), goqu.C("updated_at"),
 		goqu.L("to_jsonb(OLD)").As("before_row"), goqu.L("to_jsonb(NEW)").As("after_row"),
+		// Item 23: series_id (NEW row's -- never changes after creation) and
+		// the OLD row's own starts_at, needed to decide whether this write
+		// touches a series occurrence and, if so, what it deviated from.
+		goqu.C("series_id"), goqu.L("lower(OLD.time_range)").As("old_starts_at"),
 	}
 }
 
@@ -304,10 +310,11 @@ func (r *SessionRepository) versionedWrite(ctx context.Context, actorID, eventID
 
 	var s session.Session
 	var beforeJSON, afterJSON []byte
+	var oldStartsAt time.Time
 	err = tx.QueryRow(ctx, sql, args...).Scan(
 		&s.ID, &s.EventID, &s.RoomID, &s.SpeakerID, &s.Title, &s.Description,
 		&s.StartsAt, &s.EndsAt, &s.Version, &s.CreatedAt, &s.UpdatedAt,
-		&beforeJSON, &afterJSON,
+		&beforeJSON, &afterJSON, &s.SeriesID, &oldStartsAt,
 	)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -333,8 +340,84 @@ func (r *SessionRepository) versionedWrite(ctx context.Context, actorID, eventID
 		return session.Session{}, fmt.Errorf("auditing %s: %w", action, err)
 	}
 
+	// Item 23: a PATCH/DELETE on a series occurrence records a
+	// session_exceptions row for history -- the occurrence's live state
+	// still lives entirely in its own sessions row (including a
+	// soft-deleted one); this table only records that it deviated from
+	// the series' original plan. "delete" maps to "cancelled", any other
+	// write (only "update" exists today) to "modified".
+	if s.SeriesID != nil {
+		exceptionStatus := "modified"
+		if action == "delete" {
+			exceptionStatus = "cancelled"
+		}
+		const insertException = `
+			INSERT INTO session_exceptions (series_id, session_id, status, original_starts_at)
+			VALUES ($1, $2, $3, $4)`
+		if _, err := tx.Exec(ctx, insertException, *s.SeriesID, sessionID, exceptionStatus, oldStartsAt); err != nil {
+			return session.Session{}, fmt.Errorf("recording %s series exception: %w", action, err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return session.Session{}, fmt.Errorf("committing %s transaction: %w", action, err)
 	}
 	return s, nil
+}
+
+// CreateSeries implements item 23. It inserts the session_series row once,
+// then materializes in.Occurrences sessions by calling Create in a loop --
+// each occurrence is fully independent and atomic (item 21's BulkCreate
+// precedent), so a conflict on occurrence 5 of 10 (item 16's EXCLUDE)
+// doesn't abort occurrences 1-4 or 6-10; it's reported as that
+// occurrence's own "conflict" result. RoomID/SpeakerID/Title/Description
+// are identical across every occurrence -- only StartsAt/EndsAt shift.
+func (r *SessionRepository) CreateSeries(ctx context.Context, actorID, eventID string, in session.SeriesCreateInput) (session.Series, []session.SeriesOccurrenceResult, error) {
+	const insertSeries = `
+		INSERT INTO session_series (event_id, room_id, speaker_id, title, description, freq, interval_count, occurrences)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, event_id, room_id, speaker_id, title, description, freq, interval_count, occurrences, created_at`
+
+	var series session.Series
+	err := r.pool.QueryRow(ctx, insertSeries,
+		eventID, in.RoomID, in.SpeakerID, in.Title, in.Description, in.Freq, in.IntervalCount, in.Occurrences,
+	).Scan(
+		&series.ID, &series.EventID, &series.RoomID, &series.SpeakerID, &series.Title, &series.Description,
+		&series.Freq, &series.IntervalCount, &series.Occurrences, &series.CreatedAt,
+	)
+	if err != nil {
+		return session.Series{}, nil, fmt.Errorf("creating session series: %w", err)
+	}
+
+	step := time.Duration(in.IntervalCount) * 24 * time.Hour
+	if in.Freq == "weekly" {
+		step *= 7
+	}
+	duration := in.FirstEndsAt.Sub(in.FirstStartsAt)
+
+	results := make([]session.SeriesOccurrenceResult, in.Occurrences)
+	for i := 0; i < in.Occurrences; i++ {
+		offset := time.Duration(i) * step
+		starts := in.FirstStartsAt.Add(offset)
+		created, err := r.Create(ctx, actorID, eventID, session.CreateInput{
+			RoomID:      in.RoomID,
+			SpeakerID:   in.SpeakerID,
+			Title:       in.Title,
+			Description: in.Description,
+			StartsAt:    starts,
+			EndsAt:      starts.Add(duration),
+			SeriesID:    &series.ID,
+		})
+		switch {
+		case err == nil:
+			id := created.ID
+			results[i] = session.SeriesOccurrenceResult{StartsAt: starts, Status: "created", SessionID: &id}
+		case errors.Is(err, domain.ErrConflict):
+			results[i] = session.SeriesOccurrenceResult{StartsAt: starts, Status: "conflict"}
+		default:
+			return session.Series{}, nil, fmt.Errorf("materializing occurrence %d: %w", i, err)
+		}
+	}
+
+	return series, results, nil
 }

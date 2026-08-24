@@ -34,3 +34,7 @@ func (s *Service) UpdateSession(ctx context.Context, actorID, eventID, sessionID
 func (s *Service) DeleteSession(ctx context.Context, actorID, eventID, sessionID string, version int) (Session, error) {
 	return s.repo.Delete(ctx, actorID, eventID, sessionID, version)
 }
+
+func (s *Service) CreateSeries(ctx context.Context, actorID, eventID string, in SeriesCreateInput) (Series, []SeriesOccurrenceResult, error) {
+	return s.repo.CreateSeries(ctx, actorID, eventID, in)
+}

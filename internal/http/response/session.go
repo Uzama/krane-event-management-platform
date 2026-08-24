@@ -68,6 +68,49 @@ func NewSessionResponse(s session.Session, loc *time.Location) SessionResponse {
 	return resp
 }
 
+// SeriesOccurrenceResponse is one occurrence's outcome in a series create's
+// response (item 23) -- SessionID omitted (never null) unless Status is
+// "created", matching BulkInviteItemResponse's precedent.
+type SeriesOccurrenceResponse struct {
+	StartsAt  time.Time `json:"starts_at"`
+	Status    string    `json:"status"`
+	SessionID *string   `json:"session_id,omitempty"`
+}
+
+// SeriesResponse is POST .../sessions/series' envelope: the series' own
+// row plus every occurrence's result.
+type SeriesResponse struct {
+	ID            string                     `json:"id"`
+	EventID       string                     `json:"event_id"`
+	RoomID        string                     `json:"room_id"`
+	SpeakerID     string                     `json:"speaker_id"`
+	Title         string                     `json:"title"`
+	Description   *string                    `json:"description"`
+	Freq          string                     `json:"freq"`
+	IntervalCount int                        `json:"interval_count"`
+	Occurrences   []SeriesOccurrenceResponse `json:"occurrences"`
+	CreatedAt     time.Time                  `json:"created_at"`
+}
+
+func NewSeriesResponse(series session.Series, results []session.SeriesOccurrenceResult, loc *time.Location) SeriesResponse {
+	occurrences := make([]SeriesOccurrenceResponse, len(results))
+	for i, r := range results {
+		occurrences[i] = SeriesOccurrenceResponse{StartsAt: r.StartsAt.In(loc), Status: r.Status, SessionID: r.SessionID}
+	}
+	return SeriesResponse{
+		ID:            series.ID,
+		EventID:       series.EventID,
+		RoomID:        series.RoomID,
+		SpeakerID:     series.SpeakerID,
+		Title:         series.Title,
+		Description:   series.Description,
+		Freq:          series.Freq,
+		IntervalCount: series.IntervalCount,
+		Occurrences:   occurrences,
+		CreatedAt:     series.CreatedAt,
+	}
+}
+
 // SessionListResponse is GET /v1/events/{eventId}/sessions' envelope.
 // NextCursor is nil (omitted from the JSON) when there is no further page
 // -- never an offset.

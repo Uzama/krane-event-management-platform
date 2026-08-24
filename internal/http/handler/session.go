@@ -37,6 +37,7 @@ type SessionService interface {
 	ListSessions(ctx context.Context, eventID string, limit int, after *session.Cursor) (session.Page, error)
 	UpdateSession(ctx context.Context, actorID, eventID, sessionID string, version int, patch session.Patch) (session.Session, error)
 	DeleteSession(ctx context.Context, actorID, eventID, sessionID string, version int) (session.Session, error)
+	CreateSeries(ctx context.Context, actorID, eventID string, in session.SeriesCreateInput) (session.Series, []session.SeriesOccurrenceResult, error)
 }
 
 // SessionHandler is thin: fetch the owning event (for its Timezone),
@@ -112,6 +113,49 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusCreated, response.NewSessionResponse(created, loc))
+}
+
+// CreateSeries handles POST /v1/events/{eventId}/sessions/series, mounted
+// behind Authz(session, create) -- the same permission a plain session
+// create uses, since every occurrence goes through the exact same write.
+func (h *SessionHandler) CreateSeries(w http.ResponseWriter, r *http.Request) {
+	actor, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		h.logger.Error("session: no authenticated user in context; Auth must run before this handler")
+		h.writeInternalError(w)
+		return
+	}
+
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		h.logger.Error("session: no eventId path value; route is not /v1/events/{eventId}/sessions/series")
+		h.writeInternalError(w)
+		return
+	}
+
+	_, loc, err := h.eventTimezone(r.Context(), eventID)
+	if err != nil {
+		h.writeEventLookupError(w, "session: creating series", eventID, err)
+		return
+	}
+
+	var req request.SeriesCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeValidationError(w, map[string]any{"body": "must be valid JSON"})
+		return
+	}
+	if issues := req.Validate(loc); len(issues) > 0 {
+		h.writeValidationError(w, issues)
+		return
+	}
+
+	series, results, err := h.service.CreateSeries(r.Context(), actor.ID, eventID, req.ToSeriesCreateInput(loc))
+	if err != nil {
+		h.writeCreateOrUpdateError(w, "session: creating series", eventID, err)
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, response.NewSeriesResponse(series, results, loc))
 }
 
 // GetSession handles GET /v1/events/{eventId}/sessions/{sessionId},
