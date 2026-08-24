@@ -11,8 +11,12 @@ import (
 
 // NewRouter is the API surface: routes -> handlers. Go 1.22+'s
 // net/http.ServeMux supports method+pattern routes natively, so no router
-// dependency is needed for a health-only surface (see FEATURES.md item 24 --
-// this choice gets revisited before item 05 if oapi-codegen wants otherwise).
+// dependency is needed for a health-only surface. Item 05 confirmed this
+// choice rather than reopening it: oapi-codegen's std-http-server generator
+// target (internal/http/gen) produces a ServerInterface + HandlerFromMux
+// that targets this exact stdlib ServeMux, and OpenAPI contract validation
+// is wired into tests (internal/http/validator), not into this production
+// request path -- see FEATURES.md item 05.
 func NewRouter(health *handler.HealthHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", health)

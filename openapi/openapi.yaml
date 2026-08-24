@@ -1,0 +1,70 @@
+openapi: 3.0.3
+info:
+  title: Krane Event Management Platform
+  description: >
+    The documented API contract. Every endpoint lands here before it lands in
+    code -- see FEATURES.md item 05 and CLAUDE.md's feature workflow.
+  version: "0.1.0"
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Readiness check
+      description: >
+        Pings the database pool. 200 only when the process is up and the
+        database is reachable.
+      responses:
+        "200":
+          description: The service and its database are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: The database is unreachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - database
+      properties:
+        status:
+          type: string
+          example: ok
+        database:
+          type: string
+          example: ok
+
+    # The one error envelope every handler's failure path uses -- see
+    # internal/http/response/error.go. `details` is always present, never
+    # omitted, even when empty.
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
