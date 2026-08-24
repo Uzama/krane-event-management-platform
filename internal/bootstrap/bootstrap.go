@@ -27,6 +27,7 @@ func Boot(ctx context.Context) error {
 	router := apihttp.NewRouter(apihttp.RouterDeps{
 		Health:       handler.NewHealthHandler(c.DB, c.Logger),
 		Event:        handler.NewEventHandler(c.Events, c.Logger),
+		Member:       handler.NewMemberHandler(c.Members, c.Logger),
 		AuthVerifier: c.AuthVerifier,
 		Users:        c.Users,
 		Authz:        c.Authz,

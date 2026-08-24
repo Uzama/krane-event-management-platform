@@ -184,6 +184,189 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/members:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createMember
+      summary: Add a member to an event
+      description: >
+        Identifies the target by email, resolved atomically inside the same
+        write -- there is no "search users" endpoint. Only an admin may
+        grant anything but attendee (item 09); the permission matrix already
+        restricts this route to admin, and the repository additionally
+        guards against granting an elevated role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberCreateRequest"
+      responses:
+        "201":
+          description: The created membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No user has signed in with that email.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: That user is already a member of this event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    get:
+      operationId: listMembers
+      summary: List an event's roster
+      description: >
+        Keyset-paginated over (created_at, id); never OFFSET. admin and
+        contributor only -- attendee has no member:read permission.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque token from a previous response's next_cursor.
+      responses:
+        "200":
+          description: A page of the event's roster.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberList"
+        "400":
+          description: The cursor query parameter is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /v1/events/{eventId}/members/{memberId}:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: assignMemberRole
+      summary: Change a member's role
+      description: >
+        Its own action (assign-role), distinct from a generic member update
+        -- a contributor may add members but never assign-role
+        (docs/requirements.md §4). Version-gated. Rejected with 409
+        last_admin if it would leave the event with zero admins.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberAssignRoleRequest"
+      responses:
+        "200":
+          description: The updated membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The member's version no longer matches (version_conflict), or
+            this change would leave the event with zero admins (last_admin).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      operationId: removeMember
+      summary: Remove a member from an event
+      description: >
+        version is required as a query parameter, matching DELETE
+        /v1/events/{eventId}'s interim convention. Rejected with 409
+        last_admin if it would leave the event with zero admins.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: The member was removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The member's version no longer matches (version_conflict), or
+            removing them would leave the event with zero admins
+            (last_admin).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -376,3 +559,93 @@ components:
         ends_at:
           type: string
           format: date-time
+
+    # internal/http/response/member.go's MemberResponse, field for field.
+    # One flat shape for every role that can reach this route (admin,
+    # contributor) -- attendee has no member:read permission at all, so it
+    # never reaches here. The contributor/email-visibility nuance
+    # (docs/requirements.md §7.2) is item 10's job, not this one's.
+    Member:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - event_id
+        - user_id
+        - user_email
+        - user_name
+        - role
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_email:
+          type: string
+        user_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, contributor, attendee]
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MemberList:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        next_cursor:
+          type: string
+          description: Opaque keyset cursor. Absent when there is no further page.
+
+    # internal/http/request/member.go's AddMemberRequest.
+    MemberCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, contributor, attendee]
+
+    # internal/http/request/member.go's AssignRoleRequest. Role is always
+    # the field being set -- no absent-vs-null distinction to make on a
+    # single-field assign, so both fields are plain required properties.
+    MemberAssignRoleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - version
+      properties:
+        role:
+          type: string
+          enum: [admin, contributor, attendee]
+        version:
+          type: integer
+          description: Must match the member's current version (optimistic lock).

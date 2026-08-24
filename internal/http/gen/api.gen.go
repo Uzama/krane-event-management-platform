@@ -19,6 +19,69 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for MemberRole.
+const (
+	MemberRoleAdmin       MemberRole = "admin"
+	MemberRoleAttendee    MemberRole = "attendee"
+	MemberRoleContributor MemberRole = "contributor"
+)
+
+// Valid indicates whether the value is a known member of the MemberRole enum.
+func (e MemberRole) Valid() bool {
+	switch e {
+	case MemberRoleAdmin:
+		return true
+	case MemberRoleAttendee:
+		return true
+	case MemberRoleContributor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemberAssignRoleRequestRole.
+const (
+	MemberAssignRoleRequestRoleAdmin       MemberAssignRoleRequestRole = "admin"
+	MemberAssignRoleRequestRoleAttendee    MemberAssignRoleRequestRole = "attendee"
+	MemberAssignRoleRequestRoleContributor MemberAssignRoleRequestRole = "contributor"
+)
+
+// Valid indicates whether the value is a known member of the MemberAssignRoleRequestRole enum.
+func (e MemberAssignRoleRequestRole) Valid() bool {
+	switch e {
+	case MemberAssignRoleRequestRoleAdmin:
+		return true
+	case MemberAssignRoleRequestRoleAttendee:
+		return true
+	case MemberAssignRoleRequestRoleContributor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MemberCreateRequestRole.
+const (
+	Admin       MemberCreateRequestRole = "admin"
+	Attendee    MemberCreateRequestRole = "attendee"
+	Contributor MemberCreateRequestRole = "contributor"
+)
+
+// Valid indicates whether the value is a known member of the MemberCreateRequestRole enum.
+func (e MemberCreateRequestRole) Valid() bool {
+	switch e {
+	case Admin:
+		return true
+	case Attendee:
+		return true
+	case Contributor:
+		return true
+	default:
+		return false
+	}
+}
+
 // ErrorEnvelope defines model for ErrorEnvelope.
 type ErrorEnvelope struct {
 	Error struct {
@@ -78,6 +141,50 @@ type HealthStatus struct {
 	Status   string `json:"status"`
 }
 
+// Member defines model for Member.
+type Member struct {
+	CreatedAt time.Time          `json:"created_at"`
+	EventId   openapi_types.UUID `json:"event_id"`
+	Id        openapi_types.UUID `json:"id"`
+	Role      MemberRole         `json:"role"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UserEmail string             `json:"user_email"`
+	UserId    openapi_types.UUID `json:"user_id"`
+	UserName  string             `json:"user_name"`
+	Version   int                `json:"version"`
+}
+
+// MemberRole defines model for Member.Role.
+type MemberRole string
+
+// MemberAssignRoleRequest defines model for MemberAssignRoleRequest.
+type MemberAssignRoleRequest struct {
+	Role MemberAssignRoleRequestRole `json:"role"`
+
+	// Version Must match the member's current version (optimistic lock).
+	Version int `json:"version"`
+}
+
+// MemberAssignRoleRequestRole defines model for MemberAssignRoleRequest.Role.
+type MemberAssignRoleRequestRole string
+
+// MemberCreateRequest defines model for MemberCreateRequest.
+type MemberCreateRequest struct {
+	Email openapi_types.Email     `json:"email"`
+	Role  MemberCreateRequestRole `json:"role"`
+}
+
+// MemberCreateRequestRole defines model for MemberCreateRequest.Role.
+type MemberCreateRequestRole string
+
+// MemberList defines model for MemberList.
+type MemberList struct {
+	Data []Member `json:"data"`
+
+	// NextCursor Opaque keyset cursor. Absent when there is no further page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -106,11 +213,30 @@ type DeleteEventParams struct {
 	Version int `form:"version" json:"version"`
 }
 
+// ListMembersParams defines parameters for ListMembers.
+type ListMembersParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque token from a previous response's next_cursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// RemoveMemberParams defines parameters for RemoveMember.
+type RemoveMemberParams struct {
+	Version int `form:"version" json:"version"`
+}
+
 // CreateEventJSONRequestBody defines body for CreateEvent for application/json ContentType.
 type CreateEventJSONRequestBody = EventCreateRequest
 
 // PatchEventJSONRequestBody defines body for PatchEvent for application/json ContentType.
 type PatchEventJSONRequestBody = EventPatchRequest
+
+// CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
+type CreateMemberJSONRequestBody = MemberCreateRequest
+
+// AssignMemberRoleJSONRequestBody defines body for AssignMemberRole for application/json ContentType.
+type AssignMemberRoleJSONRequestBody = MemberAssignRoleRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -132,6 +258,18 @@ type ServerInterface interface {
 	// Update an event
 	// (PATCH /v1/events/{eventId})
 	PatchEvent(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// List an event's roster
+	// (GET /v1/events/{eventId}/members)
+	ListMembers(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListMembersParams)
+	// Add a member to an event
+	// (POST /v1/events/{eventId}/members)
+	CreateMember(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Remove a member from an event
+	// (DELETE /v1/events/{eventId}/members/{memberId})
+	RemoveMember(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, memberId openapi_types.UUID, params RemoveMemberParams)
+	// Change a member's role
+	// (PATCH /v1/events/{eventId}/members/{memberId})
+	AssignMemberRole(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, memberId openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -329,6 +467,185 @@ func (siw *ServerInterfaceWrapper) PatchEvent(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMembersParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMembers(w, r, eventId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMember operation middleware
+func (siw *ServerInterfaceWrapper) CreateMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMember(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "memberId" -------------
+	var memberId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "memberId", r.PathValue("memberId"), &memberId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "memberId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveMemberParams
+
+	// ------------- Required query parameter "version" -------------
+
+	if paramValue := r.URL.Query().Get("version"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		return
+	}
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveMember(w, r, eventId, memberId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AssignMemberRole operation middleware
+func (siw *ServerInterfaceWrapper) AssignMemberRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "memberId" -------------
+	var memberId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "memberId", r.PathValue("memberId"), &memberId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "memberId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AssignMemberRole(w, r, eventId, memberId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -455,6 +772,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}", wrapper.DeleteEvent)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}", wrapper.GetEvent)
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}", wrapper.PatchEvent)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.ListMembers)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.CreateMember)
+	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.RemoveMember)
+	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.AssignMemberRole)
 
 	return m
 }

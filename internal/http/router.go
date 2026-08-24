@@ -18,6 +18,7 @@ import (
 type RouterDeps struct {
 	Health *handler.HealthHandler
 	Event  *handler.EventHandler
+	Member *handler.MemberHandler
 
 	AuthVerifier middleware.TokenVerifier
 	Users        middleware.UserResolver
@@ -41,6 +42,12 @@ type RouterDeps struct {
 // event_members, not a per-resource Can() check (docs/requirements.md §4
 // point 3). The other three routes are Auth then Authz, matching every
 // other /v1/events/{eventId}/... route in this API.
+//
+// The four /v1/events/{eventId}/members routes (item 09) are all Auth then
+// Authz(member, ...), one per role_permissions action: create (add a
+// member), read (the roster), assign-role (change an existing member's
+// role -- its own action, distinct from a generic member:update, since
+// contributor may create but never assign-role), and delete.
 func NewRouter(deps RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", deps.Health)
@@ -49,12 +56,20 @@ func NewRouter(deps RouterDeps) http.Handler {
 	authzFor := func(action domainauthz.Action) func(http.Handler) http.Handler {
 		return middleware.Authz(deps.Authz, domainauthz.ResourceEvent, action, deps.Logger)
 	}
+	authzForMember := func(action domainauthz.Action) func(http.Handler) http.Handler {
+		return middleware.Authz(deps.Authz, domainauthz.ResourceMember, action, deps.Logger)
+	}
 
 	mux.Handle("POST /v1/events", auth(http.HandlerFunc(deps.Event.CreateEvent)))
 	mux.Handle("GET /v1/events", auth(http.HandlerFunc(deps.Event.ListEvents)))
 	mux.Handle("GET /v1/events/{eventId}", auth(authzFor(domainauthz.ActionRead)(http.HandlerFunc(deps.Event.GetEvent))))
 	mux.Handle("PATCH /v1/events/{eventId}", auth(authzFor(domainauthz.ActionUpdate)(http.HandlerFunc(deps.Event.PatchEvent))))
 	mux.Handle("DELETE /v1/events/{eventId}", auth(authzFor(domainauthz.ActionDelete)(http.HandlerFunc(deps.Event.DeleteEvent))))
+
+	mux.Handle("POST /v1/events/{eventId}/members", auth(authzForMember(domainauthz.ActionCreate)(http.HandlerFunc(deps.Member.CreateMember))))
+	mux.Handle("GET /v1/events/{eventId}/members", auth(authzForMember(domainauthz.ActionRead)(http.HandlerFunc(deps.Member.ListMembers))))
+	mux.Handle("PATCH /v1/events/{eventId}/members/{memberId}", auth(authzForMember(domainauthz.ActionAssignRole)(http.HandlerFunc(deps.Member.AssignRole))))
+	mux.Handle("DELETE /v1/events/{eventId}/members/{memberId}", auth(authzForMember(domainauthz.ActionDelete)(http.HandlerFunc(deps.Member.RemoveMember))))
 
 	return mux
 }
