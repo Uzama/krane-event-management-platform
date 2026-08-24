@@ -1,0 +1,35 @@
+internal/http/gen/api.gen.go
+  s_f76373887302cf::t_26311b712fc7f1 308-318
+internal/http/response/session.go
+  s_f76373887302cf::t_47c46bf4fc8280 48,62-68
+  s_f76373887302cf::t_91ebf2e8237555 28-35
+openapi/openapi.yaml
+  s_f76373887302cf::t_bff65bdd3e5400 1337-1347
+internal/adapter/postgres/session_query_count_test.go
+  s_f76373887302cf::t_c5fc9947de8068 1-168
+internal/domain/session/entity.go
+  s_f76373887302cf::t_277144b98b0256 26-34
+FEATURES.md
+  s_f76373887302cf::t_ed6220dce9db57 38
+internal/adapter/postgres/session_repo.go
+  s_f76373887302cf::t_fb5dffdb2b80cc 165-170,173,176,179,184,187
+  s_f76373887302cf::t_e8b49409e3781b 174-175,177-178,199-200
+AUDIT.md
+  s_f76373887302cf::t_6e42c55d48e881 329-338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "cc0bc907bac48aeb6b726aa1733f601afea4f865",
+  "prompts": {},
+  "sessions": {
+    "s_f76373887302cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd3befaf-c6ad-4ab6-88d8-dec1b8de0b55",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
