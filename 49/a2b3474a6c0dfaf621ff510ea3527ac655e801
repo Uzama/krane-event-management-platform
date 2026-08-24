@@ -1,0 +1,84 @@
+internal/http/gen/api.gen.go
+  s_a9668f224924b9::t_123a2818e5fc4f 224-282,337-349,368-373,421-435,1031-1249,1385-1389
+FEATURES.md
+  s_a9668f224924b9::t_9536a445ce7ee4 29
+docs/requirements.md
+  s_a9668f224924b9::t_a8c2e9ef3ccdb5 319-322
+  s_a9668f224924b9::t_918ece8fd6caf4 252
+internal/domain/session/entity.go
+  s_a9668f224924b9::t_ace457c0252e64 1-26
+internal/http/response/session_test.go
+  s_a9668f224924b9::t_8f208f0c321f13 1-183
+internal/http/request/session.go
+  s_a9668f224924b9::t_b8dfed208546db 1-5,7-29,35-46,48-50,52-62,70-93,95-106,108-110,112-123,125,127-131,134-148
+  s_a9668f224924b9::t_28a2dd181878ac 6
+  s_a9668f224924b9::t_d4091a572128bf 30-34,47,51,63-69
+  s_a9668f224924b9::t_3df9d56938244e 94,107,111,124,126,132-133
+internal/bootstrap/bootstrap.go
+  s_a9668f224924b9::t_542d5c12b8b7e1 32
+internal/adapter/postgres/session_repo_test.go
+  s_a9668f224924b9::t_cefbfcd946297f 643-654
+  s_a9668f224924b9::t_ffd68911ff3dba 1-642,655-722
+internal/http/request/session_test.go
+  s_a9668f224924b9::t_b029bed79b0d3c 1-5,7-10,19-25,27-36,38-48,50-63,65-80,82-94,96-106,108-110,112-131,133-142,144-152,154-164,166-175,177-220,222-232,234-236,238-260,262-264
+  s_a9668f224924b9::t_32c581396111ed 6,11-18
+  s_a9668f224924b9::t_59854ea19f38f3 26,37,49,64,81,95,107,111,132,143,153,165,176,221,233,237,261
+internal/http/router.go
+  s_a9668f224924b9::t_94b95f0b1414d7 59-63
+  s_a9668f224924b9::t_70b201aa719ca1 99-104
+  s_a9668f224924b9::t_827d8a47172471 78-80
+  s_a9668f224924b9::t_f20161a6d1b55c 19-23
+internal/http/sessions_integration_test.go
+  s_a9668f224924b9::t_96a28e9c41ddb8 462-463
+  s_a9668f224924b9::t_47fe17b8ec5a7f 339
+  s_a9668f224924b9::t_bd23087c8ca673 1-338,340-461,464-704
+internal/adapter/postgres/session_repo.go
+  s_a9668f224924b9::t_2ef6a3cf3d574a 1-321
+internal/utils/localtime_test.go
+  s_a9668f224924b9::t_d4bfc1c153c243 1-13,22-23,26-36,38,40-51,53,55-64,66-83,85-87,89-97,99-101,103-105,107-110
+  s_a9668f224924b9::t_07833c094e56dd 102
+  s_a9668f224924b9::t_b128af8579ee67 14-21,24-25,37,39,52,54,65,84,88,98,106
+internal/domain/session/port.go
+  s_a9668f224924b9::t_1f1223e0c74cc4 1-88
+AUDIT.md
+  s_a9668f224924b9::t_fde97976c7a811 227-248
+internal/http/handler/session.go
+  s_a9668f224924b9::t_d9c5396386f46d 1-102,104-107,109-223,225-228,230-350
+  s_a9668f224924b9::t_e0845acdb72e61 103,108,224,229
+internal/domain/session/errors.go
+  s_a9668f224924b9::t_410e2e869391c8 1-14
+internal/container/container.go
+  s_a9668f224924b9::t_6379ac87bcb803 43
+  s_a9668f224924b9::t_b1b347f0330d83 77,89
+  s_a9668f224924b9::t_c23b23915a1529 20
+internal/domain/session/service.go
+  s_a9668f224924b9::t_d7ab3dcac24b5b 1-36
+internal/utils/localtime.go
+  s_a9668f224924b9::t_e90a7ef93493d9 1-21,28-43,45-54
+  s_a9668f224924b9::t_d92ddd34a24217 22-27,44
+internal/http/handler/session_test.go
+  s_a9668f224924b9::t_19812aa85d1db5 1-435
+internal/domain/session/service_test.go
+  s_a9668f224924b9::t_588d8df820e990 1-182
+internal/http/response/session.go
+  s_a9668f224924b9::t_8f03cb82499b4a 1-80
+openapi/openapi.yaml
+  s_a9668f224924b9::t_41c35de04568fc 1152-1292
+  s_a9668f224924b9::t_e4b3d0c6444088 567-778
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "49a2b3474a6c0dfaf621ff510ea3527ac655e801",
+  "prompts": {},
+  "sessions": {
+    "s_a9668f224924b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ac38256-a2e9-4b81-b501-cba11b22e672",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
