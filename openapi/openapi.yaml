@@ -564,6 +564,218 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/sessions:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createSession
+      summary: Create a session in an event
+      description: >
+        Like rooms, role_permissions already has session:create rows for
+        admin/contributor (item 07), so this route runs behind
+        Authz(session, create) -- there is no events-style Auth-only
+        carve-out. room_id must reference a room belonging to this same
+        event (404 room_not_found otherwise, the same treatment a
+        cross-event room reference gets everywhere else); speaker_id must
+        reference an existing user (404 speaker_not_found otherwise) --
+        any user, not just an event member (docs/requirements.md D3).
+        starts_at/ends_at are LOCAL wall-clock strings with no offset,
+        resolved server-side against the event's own timezone -- see the
+        SessionCreateRequest schema.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionCreateRequest"
+      responses:
+        "201":
+          description: The created session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: >
+            room_id doesn't reference a room in this event
+            (room_not_found), or speaker_id doesn't reference an existing
+            user (speaker_not_found). When both are invalid, room_not_found
+            always wins -- the room lookup gates the insert, so the
+            speaker reference is never evaluated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    get:
+      operationId: listSessions
+      summary: List an event's sessions
+      description: >
+        Keyset-paginated over (created_at, id); never OFFSET. Every role
+        that can reach this route sees the full list -- unlike the event
+        roster, there is no per-session field to hide; scoping is entirely
+        the Authz chokepoint (a non-member gets 403, never a filtered
+        list).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque token from a previous response's next_cursor.
+      responses:
+        "200":
+          description: A page of sessions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+        "400":
+          description: The cursor query parameter is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /v1/events/{eventId}/sessions/{sessionId}:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getSession
+      summary: Get a session
+      description: >
+        Scoped to both eventId and sessionId -- a session belonging to a
+        different event, or soft-deleted, is indistinguishable from a
+        missing one (404).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchSession
+      summary: Update a session
+      description: >
+        Version-gated: the request's version must match the row's current
+        version or the write is rejected as a conflict. room_id/speaker_id
+        are NOT patchable at all -- fixed at creation
+        (docs/requirements.md §8); this schema has no fields for them.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionPatchRequest"
+      responses:
+        "200":
+          description: The updated session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The session's version no longer matches (version_conflict).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      operationId: deleteSession
+      summary: Delete a session
+      description: >
+        A soft delete (sessions.deleted_at set) -- matching events, not
+        rooms: docs/requirements.md D9 says cancelling a session frees its
+        room and speaker slot immediately. version is required as a query
+        parameter, matching DELETE /v1/events/{eventId}'s interim
+        convention.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: The session was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The session's version no longer matches (version_conflict).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -937,3 +1149,144 @@ components:
           type: integer
           nullable: true
           description: Must be greater than zero when present and non-null.
+
+    # internal/http/response/session.go's SessionResponse. starts_at/ends_at
+    # ARE format: date-time here (unlike the request schemas below) --
+    # they're the resolved instants, rendered with the correct offset for
+    # the event's own timezone at that specific instant (item 12's DST
+    # must-test: a session spanning a transition may show two different
+    # offsets). duration_minutes is computed from the raw instants, never
+    # from the localized wall-clock fields.
+    Session:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - event_id
+        - room_id
+        - speaker_id
+        - title
+        - description
+        - starts_at
+        - ends_at
+        - duration_minutes
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        speaker_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+          description: The actual elapsed duration (ends_at - starts_at), never a naive wall-clock component subtraction.
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SessionList:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+        next_cursor:
+          type: string
+          description: Opaque keyset cursor. Absent when there is no further page.
+
+    # internal/http/request/session.go's CreateSessionRequest. starts_at/
+    # ends_at are LOCAL wall-clock strings -- no timezone offset, no "Z" --
+    # resolved server-side against the event's own timezone
+    # (utils.ResolveLocalTime). A local time that falls in a spring-forward
+    # DST gap (e.g. 2:30am on a day the clock jumps 2:00am -> 3:00am) is
+    # rejected as 422, not silently normalized; an ambiguous fall-back time
+    # (one that occurs twice) resolves to the earlier of the two instants,
+    # a documented convention, not an error.
+    SessionCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - room_id
+        - speaker_id
+        - title
+        - starts_at
+        - ends_at
+      properties:
+        room_id:
+          type: string
+          format: uuid
+          description: Must belong to this same event.
+        speaker_id:
+          type: string
+          format: uuid
+          description: Any existing user -- not required to be a member of this event.
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        starts_at:
+          type: string
+          description: >
+            Local wall-clock time, no offset (e.g. "2026-06-15T09:00:00"),
+            resolved against the event's timezone. NOT format: date-time --
+            an offset here is rejected.
+        ends_at:
+          type: string
+          description: Same format as starts_at. Must resolve to an instant after starts_at.
+
+    # internal/http/request/session.go's PatchSessionRequest. room_id/
+    # speaker_id are deliberately absent from this schema, not merely
+    # optional -- they are not patchable at all (docs/requirements.md §8,
+    # staged for TRADEOFFS.md). starts_at/ends_at must both be provided
+    # together or neither -- time_range is one column, so a partial change
+    # would need a read the versioned UPDATE is built to avoid.
+    SessionPatchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          description: Must match the session's current version (optimistic lock).
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        starts_at:
+          type: string
+          description: Local wall-clock time, no offset. Must be provided together with ends_at.
+        ends_at:
+          type: string
+          description: Local wall-clock time, no offset. Must be provided together with starts_at.
