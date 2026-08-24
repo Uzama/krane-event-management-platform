@@ -1,0 +1,75 @@
+internal/http/handler/member_test.go
+  s_a2ee85d692560a::t_072d710e14b038 142-160
+  s_a2ee85d692560a::t_20c97a53a402fe 45,65,80,95,110,131,165,180,196,212,234,256
+internal/http/middleware/authz_integration_test.go
+  s_a2ee85d692560a::t_12cb53efb8b65c 179-223
+  s_a2ee85d692560a::t_b2860cf41b3737 43-49,70-81,83
+internal/domain/authz/port.go
+  s_a2ee85d692560a::t_e46c50b2a984b7 35-44,46
+internal/http/gen/api.gen.go
+  s_a2ee85d692560a::t_0148adfc69b3b7 151
+FAILURES.md
+  s_a2ee85d692560a::t_57b27542360f33 13
+internal/http/middleware/authz.go
+  s_a2ee85d692560a::t_03a330321a6fa4 40,52
+  s_a2ee85d692560a::t_4b51171154aae6 4
+  s_a2ee85d692560a::t_9565dd27bfcc4c 57-79
+  s_a2ee85d692560a::t_73150532318161 80-91
+internal/http/middleware/authz_test.go
+  s_a2ee85d692560a::t_e49383025a915e 17,21-22
+  s_a2ee85d692560a::t_e86bd16d277264 53-83
+internal/http/handler/member.go
+  s_a2ee85d692560a::t_115310d407bf2a 184
+  s_a2ee85d692560a::t_7f385e1a80e25c 68-74,91
+  s_a2ee85d692560a::t_5f288f4d399e72 140
+  s_a2ee85d692560a::t_b3a04d46d5cc3a 104-110
+  s_a2ee85d692560a::t_c30afbc4f847b3 161-167
+internal/http/handler/event_test.go
+  s_a2ee85d692560a::t_c48b15a866748b 60-65
+internal/adapter/authz/policy.go
+  s_a2ee85d692560a::t_7817e4cf3e5d19 105-112,119,121,125
+internal/http/response/member.go
+  s_a2ee85d692560a::t_643449cd585cce 10-19,24,32-48,58-62,73,76
+internal/adapter/authz/policy_test.go
+  s_a2ee85d692560a::t_e62243d2440f40 323,330-331
+  s_a2ee85d692560a::t_a9587c905d2db1 281,288-289
+  s_a2ee85d692560a::t_f35c5e0f7324be 254,258-259
+  s_a2ee85d692560a::t_88b24e5eff062b 300,307-308
+  s_a2ee85d692560a::t_dc1610b16f1071 260
+  s_a2ee85d692560a::t_9da749c4d97bcb 290
+  s_a2ee85d692560a::t_c2f2c17cf5f885 309
+  s_a2ee85d692560a::t_61be8fd50b3a6c 332
+internal/http/events_integration_test.go
+  s_a2ee85d692560a::t_3c24703fda00f3 521-668
+FEATURES.md
+  s_a2ee85d692560a::t_80ffdf7259845b 27,29
+docs/requirements.md
+  s_a2ee85d692560a::t_cb0abd0a550e11 316-317
+  s_a2ee85d692560a::t_64f7e78e47b44e 251
+  s_a2ee85d692560a::t_654c1fcb020dbb 273,275,277,279
+AUDIT.md
+  s_a2ee85d692560a::t_f698ce0195b663 195-210
+openapi/openapi.yaml
+  s_a2ee85d692560a::t_47bd53f24d1b53 564-568
+internal/http/members_integration_test.go
+  s_a2ee85d692560a::t_5b6c7cd8a24686 211-269
+internal/http/response/member_test.go
+  s_a2ee85d692560a::t_609d6929e92e0b 27-28,46-63,68,91,96-143
+  s_a2ee85d692560a::t_01971aa3804a9f 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f017049dc923de9d405e04d2ab7409c32475b16a",
+  "prompts": {},
+  "sessions": {
+    "s_a2ee85d692560a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e04e9dba-96b3-4def-99a2-8d96d9fa3b20",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
