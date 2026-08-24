@@ -185,6 +185,42 @@ type MemberList struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// Room defines model for Room.
+type Room struct {
+	Capacity  *int               `json:"capacity"`
+	CreatedAt time.Time          `json:"created_at"`
+	EventId   openapi_types.UUID `json:"event_id"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	Version   int                `json:"version"`
+}
+
+// RoomCreateRequest defines model for RoomCreateRequest.
+type RoomCreateRequest struct {
+	// Capacity Must be greater than zero when present.
+	Capacity *int   `json:"capacity,omitempty"`
+	Name     string `json:"name"`
+}
+
+// RoomList defines model for RoomList.
+type RoomList struct {
+	Data []Room `json:"data"`
+
+	// NextCursor Opaque keyset cursor. Absent when there is no further page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// RoomPatchRequest defines model for RoomPatchRequest.
+type RoomPatchRequest struct {
+	// Capacity Must be greater than zero when present and non-null.
+	Capacity *int    `json:"capacity,omitempty"`
+	Name     *string `json:"name,omitempty"`
+
+	// Version Must match the room's current version (optimistic lock).
+	Version int `json:"version"`
+}
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -226,6 +262,19 @@ type RemoveMemberParams struct {
 	Version int `form:"version" json:"version"`
 }
 
+// ListRoomsParams defines parameters for ListRooms.
+type ListRoomsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque token from a previous response's next_cursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// DeleteRoomParams defines parameters for DeleteRoom.
+type DeleteRoomParams struct {
+	Version int `form:"version" json:"version"`
+}
+
 // CreateEventJSONRequestBody defines body for CreateEvent for application/json ContentType.
 type CreateEventJSONRequestBody = EventCreateRequest
 
@@ -237,6 +286,12 @@ type CreateMemberJSONRequestBody = MemberCreateRequest
 
 // AssignMemberRoleJSONRequestBody defines body for AssignMemberRole for application/json ContentType.
 type AssignMemberRoleJSONRequestBody = MemberAssignRoleRequest
+
+// CreateRoomJSONRequestBody defines body for CreateRoom for application/json ContentType.
+type CreateRoomJSONRequestBody = RoomCreateRequest
+
+// PatchRoomJSONRequestBody defines body for PatchRoom for application/json ContentType.
+type PatchRoomJSONRequestBody = RoomPatchRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -270,6 +325,21 @@ type ServerInterface interface {
 	// Change a member's role
 	// (PATCH /v1/events/{eventId}/members/{memberId})
 	AssignMemberRole(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, memberId openapi_types.UUID)
+	// List an event's rooms
+	// (GET /v1/events/{eventId}/rooms)
+	ListRooms(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListRoomsParams)
+	// Create a room in an event
+	// (POST /v1/events/{eventId}/rooms)
+	CreateRoom(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Delete a room
+	// (DELETE /v1/events/{eventId}/rooms/{roomId})
+	DeleteRoom(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, roomId openapi_types.UUID, params DeleteRoomParams)
+	// Get a room
+	// (GET /v1/events/{eventId}/rooms/{roomId})
+	GetRoom(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, roomId openapi_types.UUID)
+	// Update a room
+	// (PATCH /v1/events/{eventId}/rooms/{roomId})
+	PatchRoom(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, roomId openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -646,6 +716,225 @@ func (siw *ServerInterfaceWrapper) AssignMemberRole(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListRooms operation middleware
+func (siw *ServerInterfaceWrapper) ListRooms(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRoomsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRooms(w, r, eventId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRoom operation middleware
+func (siw *ServerInterfaceWrapper) CreateRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRoom(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRoom operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "roomId" -------------
+	var roomId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roomId", r.PathValue("roomId"), &roomId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roomId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRoomParams
+
+	// ------------- Required query parameter "version" -------------
+
+	if paramValue := r.URL.Query().Get("version"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		return
+	}
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRoom(w, r, eventId, roomId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRoom operation middleware
+func (siw *ServerInterfaceWrapper) GetRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "roomId" -------------
+	var roomId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roomId", r.PathValue("roomId"), &roomId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roomId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoom(w, r, eventId, roomId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchRoom operation middleware
+func (siw *ServerInterfaceWrapper) PatchRoom(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "roomId" -------------
+	var roomId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "roomId", r.PathValue("roomId"), &roomId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roomId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchRoom(w, r, eventId, roomId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -776,6 +1065,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.CreateMember)
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.RemoveMember)
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.AssignMemberRole)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/rooms", wrapper.ListRooms)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/rooms", wrapper.CreateRoom)
+	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.DeleteRoom)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.GetRoom)
+	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.PatchRoom)
 
 	return m
 }
