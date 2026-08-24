@@ -1,5 +1,5 @@
 package: gen
-output: health.gen.go
+output: api.gen.go
 generate:
   models: true
   std-http-server: true

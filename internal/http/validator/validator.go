@@ -86,5 +86,13 @@ func requestValidationInput(spec *openapi3.T, r *http.Request) (*openapi3filter.
 		Request:    r,
 		PathParams: pathParams,
 		Route:      route,
+		// Item 08 is the first spec with a `security` requirement
+		// (bearerAuth). Token validity is exhaustively proved elsewhere
+		// (adapter/auth, http/middleware's Auth integration tests) --
+		// this package only checks wire shape against the contract, so
+		// authentication itself is a deliberate no-op here.
+		Options: &openapi3filter.Options{
+			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		},
 	}, nil
 }

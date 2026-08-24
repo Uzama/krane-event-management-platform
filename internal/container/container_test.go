@@ -54,6 +54,9 @@ func TestNew_Succeeds(t *testing.T) {
 	if c.Authz == nil {
 		t.Error("container.Authz is nil -- item 07 must wire the role_permissions policy at boot")
 	}
+	if c.Events == nil {
+		t.Error("container.Events is nil -- item 08 must wire the event service at boot")
+	}
 }
 
 // TestNew_FailsFastOnDeadOIDCIssuer mirrors TestNew_FailsFastOnDeadHost for

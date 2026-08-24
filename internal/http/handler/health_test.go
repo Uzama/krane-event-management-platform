@@ -95,7 +95,10 @@ func TestHealthHandler_Integration(t *testing.T) {
 	}
 	defer pool.Close()
 
-	router := apihttp.NewRouter(handler.NewHealthHandler(pool, discardLogger()))
+	router := apihttp.NewRouter(apihttp.RouterDeps{
+		Health: handler.NewHealthHandler(pool, discardLogger()),
+		Logger: discardLogger(),
+	})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 
