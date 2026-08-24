@@ -37,6 +37,18 @@ func UserFromContext(ctx context.Context) (user.User, bool) {
 	return u, ok
 }
 
+// ContextWithUser attaches u the same way Auth does.
+//
+// TEST SEAM -- NOT FOR PRODUCTION USE. Exported only so tests can exercise
+// a middleware chained after Auth (e.g. Authz) without running the real
+// token-verification chain first. In production, a user's identity must
+// come from exactly one place: a validated bearer token, mapped to a users
+// row by Auth. No handler, middleware, or other production code may call
+// this to attach a user -- doing so would be an authentication bypass.
+func ContextWithUser(ctx context.Context, u user.User) context.Context {
+	return context.WithValue(ctx, userContextKey, u)
+}
+
 // Auth validates the Authorization: Bearer header via verifier, maps the
 // token's sub to a users row via users, and attaches that user to the
 // request context. Every rejection is a 401 through the standard error

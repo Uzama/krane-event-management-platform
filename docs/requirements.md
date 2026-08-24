@@ -209,6 +209,7 @@ Three things this encodes:
 1. **`assign-role` is its own action**, distinct from `member:update`. That is what makes item 07's `must:` test — a contributor gets 403 attempting a role change — a data question rather than a conditional in a handler.
 2. **Authorization governs the response body, not just reachability.** An attendee may `event:read`, but the presenter for that role emits no roster and no `email` key anywhere (item 10).
 3. **Access is membership.** Attendee read access means exactly *"has an `event_members` row for this event."* Item 10's list scoping filters by that membership — visibility is one half, scoping is the other. There is no accepted-vs-pending distinction and no read path that bypasses the chokepoint.
+4. **A non-existent event and "not a member of this event" are the same answer, deliberately.** `Can` looks up the caller's row in `event_members` for the given event id; no row comes back whether the id belongs to no one or to no event at all, and both cases return the identical `(false, nil)` — surfaced as `403 forbidden`, never `404`. A `404` would tell a caller with no standing on an event whether that event exists, which is itself information the "no leak of what exists" rule (CLAUDE.md) says they aren't entitled to. Item 07 proves this at both the policy layer and the full HTTP stack.
 
 ---
 

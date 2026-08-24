@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Uzama/krane-event-management-platform/internal/adapter/auth"
+	"github.com/Uzama/krane-event-management-platform/internal/adapter/authz"
 	"github.com/Uzama/krane-event-management-platform/internal/adapter/postgres"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/user"
 	"github.com/Uzama/krane-event-management-platform/internal/utils"
@@ -31,6 +32,7 @@ type Container struct {
 	DB           *pgxpool.Pool
 	AuthVerifier *auth.Verifier
 	Users        *user.Service
+	Authz        *authz.Policy
 }
 
 // New builds every dependency and proves the database and the OIDC issuer
@@ -55,12 +57,19 @@ func New(ctx context.Context, cfg utils.Config) (*Container, error) {
 
 	users := user.NewService(postgres.NewUserRepository(pool))
 
+	policy, err := authz.New(ctx, pool)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("wiring authz policy: %w", err)
+	}
+
 	return &Container{
 		Config:       cfg,
 		Logger:       logger,
 		DB:           pool,
 		AuthVerifier: verifier,
 		Users:        users,
+		Authz:        policy,
 	}, nil
 }
 
