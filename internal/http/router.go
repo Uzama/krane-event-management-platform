@@ -19,6 +19,7 @@ type RouterDeps struct {
 	Health *handler.HealthHandler
 	Event  *handler.EventHandler
 	Member *handler.MemberHandler
+	Room   *handler.RoomHandler
 
 	AuthVerifier middleware.TokenVerifier
 	Users        middleware.UserResolver
@@ -48,6 +49,12 @@ type RouterDeps struct {
 // member), read (the roster), assign-role (change an existing member's
 // role -- its own action, distinct from a generic member:update, since
 // contributor may create but never assign-role), and delete.
+//
+// The five /v1/events/{eventId}/rooms routes (item 11) are all Auth then
+// Authz(room, ...) -- unlike events' create/list, role_permissions already
+// has room:create and room:read rows for admin/contributor, so there is no
+// events-style Auth-only carve-out here; every room route goes through the
+// chokepoint, matching the members pattern.
 func NewRouter(deps RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", deps.Health)
@@ -58,6 +65,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 	}
 	authzForMember := func(action domainauthz.Action) func(http.Handler) http.Handler {
 		return middleware.Authz(deps.Authz, domainauthz.ResourceMember, action, deps.Logger)
+	}
+	authzForRoom := func(action domainauthz.Action) func(http.Handler) http.Handler {
+		return middleware.Authz(deps.Authz, domainauthz.ResourceRoom, action, deps.Logger)
 	}
 
 	mux.Handle("POST /v1/events", auth(http.HandlerFunc(deps.Event.CreateEvent)))
@@ -70,6 +80,12 @@ func NewRouter(deps RouterDeps) http.Handler {
 	mux.Handle("GET /v1/events/{eventId}/members", auth(authzForMember(domainauthz.ActionRead)(http.HandlerFunc(deps.Member.ListMembers))))
 	mux.Handle("PATCH /v1/events/{eventId}/members/{memberId}", auth(authzForMember(domainauthz.ActionAssignRole)(http.HandlerFunc(deps.Member.AssignRole))))
 	mux.Handle("DELETE /v1/events/{eventId}/members/{memberId}", auth(authzForMember(domainauthz.ActionDelete)(http.HandlerFunc(deps.Member.RemoveMember))))
+
+	mux.Handle("POST /v1/events/{eventId}/rooms", auth(authzForRoom(domainauthz.ActionCreate)(http.HandlerFunc(deps.Room.CreateRoom))))
+	mux.Handle("GET /v1/events/{eventId}/rooms", auth(authzForRoom(domainauthz.ActionRead)(http.HandlerFunc(deps.Room.ListRooms))))
+	mux.Handle("GET /v1/events/{eventId}/rooms/{roomId}", auth(authzForRoom(domainauthz.ActionRead)(http.HandlerFunc(deps.Room.GetRoom))))
+	mux.Handle("PATCH /v1/events/{eventId}/rooms/{roomId}", auth(authzForRoom(domainauthz.ActionUpdate)(http.HandlerFunc(deps.Room.PatchRoom))))
+	mux.Handle("DELETE /v1/events/{eventId}/rooms/{roomId}", auth(authzForRoom(domainauthz.ActionDelete)(http.HandlerFunc(deps.Room.DeleteRoom))))
 
 	return mux
 }

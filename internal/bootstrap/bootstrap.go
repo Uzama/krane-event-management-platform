@@ -28,6 +28,7 @@ func Boot(ctx context.Context) error {
 		Health:       handler.NewHealthHandler(c.DB, c.Logger),
 		Event:        handler.NewEventHandler(c.Events, c.Logger),
 		Member:       handler.NewMemberHandler(c.Members, c.Logger),
+		Room:         handler.NewRoomHandler(c.Rooms, c.Logger),
 		AuthVerifier: c.AuthVerifier,
 		Users:        c.Users,
 		Authz:        c.Authz,
