@@ -221,6 +221,65 @@ type RoomPatchRequest struct {
 	Version int `json:"version"`
 }
 
+// Session defines model for Session.
+type Session struct {
+	CreatedAt   time.Time `json:"created_at"`
+	Description *string   `json:"description"`
+
+	// DurationMinutes The actual elapsed duration (ends_at - starts_at), never a naive wall-clock component subtraction.
+	DurationMinutes int                `json:"duration_minutes"`
+	EndsAt          time.Time          `json:"ends_at"`
+	EventId         openapi_types.UUID `json:"event_id"`
+	Id              openapi_types.UUID `json:"id"`
+	RoomId          openapi_types.UUID `json:"room_id"`
+	SpeakerId       openapi_types.UUID `json:"speaker_id"`
+	StartsAt        time.Time          `json:"starts_at"`
+	Title           string             `json:"title"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+	Version         int                `json:"version"`
+}
+
+// SessionCreateRequest defines model for SessionCreateRequest.
+type SessionCreateRequest struct {
+	Description *string `json:"description,omitempty"`
+
+	// EndsAt Same format as starts_at. Must resolve to an instant after starts_at.
+	EndsAt string `json:"ends_at"`
+
+	// RoomId Must belong to this same event.
+	RoomId openapi_types.UUID `json:"room_id"`
+
+	// SpeakerId Any existing user -- not required to be a member of this event.
+	SpeakerId openapi_types.UUID `json:"speaker_id"`
+
+	// StartsAt Local wall-clock time, no offset (e.g. "2026-06-15T09:00:00"), resolved against the event's timezone. NOT format: date-time -- an offset here is rejected.
+	StartsAt string `json:"starts_at"`
+	Title    string `json:"title"`
+}
+
+// SessionList defines model for SessionList.
+type SessionList struct {
+	Data []Session `json:"data"`
+
+	// NextCursor Opaque keyset cursor. Absent when there is no further page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// SessionPatchRequest defines model for SessionPatchRequest.
+type SessionPatchRequest struct {
+	Description *string `json:"description,omitempty"`
+
+	// EndsAt Local wall-clock time, no offset. Must be provided together with starts_at.
+	EndsAt *string `json:"ends_at,omitempty"`
+
+	// StartsAt Local wall-clock time, no offset. Must be provided together with ends_at.
+	StartsAt *string `json:"starts_at,omitempty"`
+	Title    *string `json:"title,omitempty"`
+
+	// Version Must match the session's current version (optimistic lock).
+	Version int `json:"version"`
+}
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorEnvelope
 
@@ -275,6 +334,19 @@ type DeleteRoomParams struct {
 	Version int `form:"version" json:"version"`
 }
 
+// ListSessionsParams defines parameters for ListSessions.
+type ListSessionsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque token from a previous response's next_cursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// DeleteSessionParams defines parameters for DeleteSession.
+type DeleteSessionParams struct {
+	Version int `form:"version" json:"version"`
+}
+
 // CreateEventJSONRequestBody defines body for CreateEvent for application/json ContentType.
 type CreateEventJSONRequestBody = EventCreateRequest
 
@@ -292,6 +364,12 @@ type CreateRoomJSONRequestBody = RoomCreateRequest
 
 // PatchRoomJSONRequestBody defines body for PatchRoom for application/json ContentType.
 type PatchRoomJSONRequestBody = RoomPatchRequest
+
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = SessionCreateRequest
+
+// PatchSessionJSONRequestBody defines body for PatchSession for application/json ContentType.
+type PatchSessionJSONRequestBody = SessionPatchRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -340,6 +418,21 @@ type ServerInterface interface {
 	// Update a room
 	// (PATCH /v1/events/{eventId}/rooms/{roomId})
 	PatchRoom(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, roomId openapi_types.UUID)
+	// List an event's sessions
+	// (GET /v1/events/{eventId}/sessions)
+	ListSessions(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListSessionsParams)
+	// Create a session in an event
+	// (POST /v1/events/{eventId}/sessions)
+	CreateSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// Delete a session
+	// (DELETE /v1/events/{eventId}/sessions/{sessionId})
+	DeleteSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, sessionId openapi_types.UUID, params DeleteSessionParams)
+	// Get a session
+	// (GET /v1/events/{eventId}/sessions/{sessionId})
+	GetSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, sessionId openapi_types.UUID)
+	// Update a session
+	// (PATCH /v1/events/{eventId}/sessions/{sessionId})
+	PatchSession(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, sessionId openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -935,6 +1028,225 @@ func (siw *ServerInterfaceWrapper) PatchRoom(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSessionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSessions(w, r, eventId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSession(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSession operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSessionParams
+
+	// ------------- Required query parameter "version" -------------
+
+	if paramValue := r.URL.Query().Get("version"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		return
+	}
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSession(w, r, eventId, sessionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSession operation middleware
+func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSession(w, r, eventId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchSession operation middleware
+func (siw *ServerInterfaceWrapper) PatchSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchSession(w, r, eventId, sessionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1070,6 +1382,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.DeleteRoom)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.GetRoom)
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/rooms/{roomId}", wrapper.PatchRoom)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/sessions", wrapper.ListSessions)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/sessions", wrapper.CreateSession)
+	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.DeleteSession)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.GetSession)
+	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}/sessions/{sessionId}", wrapper.PatchSession)
 
 	return m
 }
