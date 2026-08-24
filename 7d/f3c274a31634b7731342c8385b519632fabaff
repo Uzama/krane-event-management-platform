@@ -1,0 +1,41 @@
+cmd/seed/generate.go
+  s_9b53b212ac788c::t_222b71d044b317 1-511
+AUDIT.md
+  s_9b53b212ac788c::t_ac4231d64053f2 266-283
+cmd/seed/demo.go
+  s_9b53b212ac788c::t_222b71d044b317 1-35
+cmd/seed/main.go
+  s_9b53b212ac788c::t_222b71d044b317 1-172
+cmd/seed/load_test.go
+  s_9b53b212ac788c::t_222b71d044b317 1-190
+cmd/seed/uuidv7_test.go
+  s_9b53b212ac788c::t_222b71d044b317 1-40
+FAILURES.md
+  s_9b53b212ac788c::t_222b71d044b317 15-16
+FEATURES.md
+  s_9b53b212ac788c::t_222b71d044b317 31
+cmd/seed/generate_test.go
+  s_9b53b212ac788c::t_222b71d044b317 1-261
+cmd/seed/load.go
+  s_9b53b212ac788c::t_222b71d044b317 1-168
+cmd/seed/uuidv7.go
+  s_9b53b212ac788c::t_222b71d044b317 1-37
+Makefile
+  s_9b53b212ac788c::t_222b71d044b317 24-30,48-56,90-92,102-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "7df3c274a31634b7731342c8385b519632fabaff",
+  "prompts": {},
+  "sessions": {
+    "s_9b53b212ac788c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d6a4b13-76ab-42fc-a7e5-3b8ab2bea873",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
