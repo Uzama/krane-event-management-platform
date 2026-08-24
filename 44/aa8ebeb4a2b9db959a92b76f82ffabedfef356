@@ -1,0 +1,110 @@
+internal/container/container.go
+  s_3c2c64297109ae::t_fa60aa34681929 37
+  s_3c2c64297109ae::t_1a59aa340ff923 68-69,77
+  s_3c2c64297109ae::t_022a81ae5ac2ae 17
+internal/http/response/event.go
+  s_3c2c64297109ae::t_39cfe0363005b0 1-59
+internal/http/handler/event.go
+  s_3c2c64297109ae::t_7b42a3c158ff07 1-245
+internal/http/handler/health_test.go
+  s_3c2c64297109ae::t_4102a6235b6cb1 98-101
+internal/http/events_integration_test.go
+  s_3c2c64297109ae::t_ec3dbbd7d53c08 167-176,198-202,208-209
+  s_3c2c64297109ae::t_d55f3c6787628c 396,405-406,411-412,420-421
+  s_3c2c64297109ae::t_fd00ef1c5d837d 245
+  s_3c2c64297109ae::t_e3002f0006dc43 17
+  s_3c2c64297109ae::t_e5bea23e258508 439,447-448,528-529
+  s_3c2c64297109ae::t_dd2944fee55dbd 452-500
+  s_3c2c64297109ae::t_20f06293ce6508 501-520
+  s_3c2c64297109ae::t_bb17d74a515e06 212,214-219,221-225,236,239
+  s_3c2c64297109ae::t_4535eb5065ef47 254-255,257,263,272-273,275,279-280,282,289,299,305-306,308,314,322-327,332-333
+  s_3c2c64297109ae::t_9230fc5cddf580 1-16,18-166,177-197,203-207,210-211,213,220,226-235,237-238,240-244,246-253,256,258-262,264-271,274,276-278,281,283-288,290-298,300-304,307,309-313,315-321,328-331,334-344,347-351,353-361,364-368,371-378,381-395,397-404,407-410,413-419,422-438,440-446,449-451,521-527,530-531
+  s_3c2c64297109ae::t_e6cd4de6eb41a1 345-346,352,362-363,369-370,379-380
+internal/adapter/postgres/event_repo.go
+  s_3c2c64297109ae::t_93fdad3a613598 1-159,161-162,165-297
+  s_3c2c64297109ae::t_74788e88faba31 160,163-164
+internal/domain/errors.go
+  s_3c2c64297109ae::t_55cc089f9daf43 1-29
+internal/http/request/event_test.go
+  s_3c2c64297109ae::t_d525bba371a332 1-191
+migrations/20260824150000_events_keyset_index.up.sql
+  s_3c2c64297109ae::t_6adfc468f04121 1-7
+internal/adapter/postgres/event_repo_test.go
+  s_3c2c64297109ae::t_fe429d38cb1630 192-198,207,216-226,237,240-242,250-251
+  s_3c2c64297109ae::t_1a08301b90ba31 1-81,84-90,92-96,98,102-106,129-130,133-191,199-206,208-215,227-236,238-239,243-249,252-435
+  s_3c2c64297109ae::t_5b4ed0ab00b803 82-83,91,97,99-101,107-128,131-132
+internal/domain/event/port.go
+  s_3c2c64297109ae::t_648d57974600b1 1-73
+FEATURES.md
+  s_3c2c64297109ae::t_4e971a11c7119c 25
+internal/http/response/event_test.go
+  s_3c2c64297109ae::t_994353966ddb5e 1-72
+internal/http/gen/cfg.yaml
+  s_3c2c64297109ae::t_140d69325e9c29 2
+internal/domain/event/entity.go
+  s_3c2c64297109ae::t_d6da0cef8a394a 1-23
+internal/http/validator/validator.go
+  s_3c2c64297109ae::t_e4d510f73c26ac 89-96
+internal/bootstrap/bootstrap.go
+  s_3c2c64297109ae::t_e5119bb4df8948 27-34
+go.mod
+  s_3c2c64297109ae::t_ff6f16b695af30 7
+  s_3c2c64297109ae::t_d71166c4eeab24 12,16,20
+internal/domain/event/service_test.go
+  s_3c2c64297109ae::t_06158bdd88c96a 1-13,37-173
+  s_3c2c64297109ae::t_1639d3871a29c3 14-36
+internal/domain/opt/optional_test.go
+  s_3c2c64297109ae::t_1a7941437f7151 1-103
+internal/domain/event/service.go
+  s_3c2c64297109ae::t_30e6d76ed7ee07 1-37
+internal/utils/cursor.go
+  s_3c2c64297109ae::t_997b30567c31e1 1-50
+migrations/20260824150000_events_keyset_index.down.sql
+  s_3c2c64297109ae::t_5632488c592990 1
+internal/http/gen/api.gen.go
+  s_3c2c64297109ae::t_5d26a512c9c5ca 1-460
+AUDIT.md
+  s_3c2c64297109ae::t_2a80cf083a3241 158-175
+internal/utils/cursor_test.go
+  s_3c2c64297109ae::t_168866a4e8c45a 1-62
+internal/http/handler/event_test.go
+  s_3c2c64297109ae::t_6ef3a93bdd90ef 34-35
+  s_3c2c64297109ae::t_23f7de843cc7f9 269-284,286-289,291-293,295-303
+  s_3c2c64297109ae::t_7403bf0d4e32f8 25-26
+  s_3c2c64297109ae::t_fe8604166a1cd3 52
+  s_3c2c64297109ae::t_3be09fdd1dbb9f 69,89,103,118,133,148,168,182,196,211,226,241,256,309,324
+  s_3c2c64297109ae::t_1ec0b184b9cc0f 1-24,27-33,36-51,53-68,70-88,90-102,104-117,119-132,134-147,149-167,169-181,183-195,197-210,212-225,227-240,242-255,257-268,285,290,294,304-308,310-323,325-335
+FAILURES.md
+  s_3c2c64297109ae::t_5f0f6680a10690 10
+internal/http/request/event.go
+  s_3c2c64297109ae::t_41f5a50d088046 19-23
+  s_3c2c64297109ae::t_7032afd127852f 1-18,24-117
+internal/domain/opt/optional.go
+  s_3c2c64297109ae::t_23eea6a60d2358 1-36
+internal/container/container_test.go
+  s_3c2c64297109ae::t_2a9d783c6306b2 57-59
+internal/http/router.go
+  s_3c2c64297109ae::t_2dd38b83e37ca4 7,10,12,15-28,31-44,46-58
+internal/http/router_test.go
+  s_3c2c64297109ae::t_27e32d5796cae5 44-47
+openapi/openapi.yaml
+  s_3c2c64297109ae::t_b591ead05541ce 31-186,188-227,267-378
+go.sum
+  s_3c2c64297109ae::t_7d7023518e1451 1-6,15-17,32,36,53-54,69,77-78,81,89-90,119-120,128-129,136-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "44aa8ebeb4a2b9db959a92b76f82ffabedfef356",
+  "prompts": {},
+  "sessions": {
+    "s_3c2c64297109ae": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "253955b1-889d-4018-ae7e-cccb9f31542b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
