@@ -1,0 +1,71 @@
+internal/adapter/postgres/member_repo.go
+  s_f76373887302cf::t_1cc4f025b2ebf8 173-198
+internal/http/handler/member_test.go
+  s_f76373887302cf::t_0e020265ef1dd2 390,406,422
+  s_f76373887302cf::t_da0d7cc2731d59 20-22,35-36
+  s_f76373887302cf::t_0a94d912830d30 37,439-471
+  s_f76373887302cf::t_e35c077fd501d3 5
+  s_f76373887302cf::t_752f0421380e72 237-347
+internal/http/handler/event.go
+  s_f76373887302cf::t_5e51a0e07c2c74 227-229,231-235
+  s_f76373887302cf::t_da7865b2e81e5b 177-182
+  s_f76373887302cf::t_9b137ac8ca5af8 90,169,206
+  s_f76373887302cf::t_db41a95e9233ec 213-220,230,236-238
+AUDIT.md
+  s_f76373887302cf::t_276a01f7e77a1b 307-325,328
+  s_f76373887302cf::t_b599ab806469d8 326-327
+internal/http/handler/member.go
+  s_f76373887302cf::t_1e74fcc0a3e47b 243-245,247-250
+  s_f76373887302cf::t_d9ac9833d9604e 246
+  s_f76373887302cf::t_cf8972bc079ff5 234-238,251-255
+  s_f76373887302cf::t_ddbb13a8eff0de 24
+  s_f76373887302cf::t_bf30f75e94ce9e 181
+  s_f76373887302cf::t_6e1f8fab5472a3 190-191,208-214,223
+FEATURES.md
+  s_f76373887302cf::t_5ffe32588f50e7 37
+internal/http/handler/room.go
+  s_f76373887302cf::t_8b6204b2de0ca1 170
+  s_f76373887302cf::t_be00f2f507e911 179-181
+  s_f76373887302cf::t_a24765a9b364f5 206
+  s_f76373887302cf::t_4770ed1f771c0d 238-241,249,254-258
+  s_f76373887302cf::t_0ff686ba353f15 246-248,250-253
+internal/domain/member/port.go
+  s_f76373887302cf::t_84d8536235241f 44-47
+internal/domain/member/service_test.go
+  s_f76373887302cf::t_544d59e3f56292 44-48
+  s_f76373887302cf::t_c0a434187590d6 18-21
+internal/domain/member/service.go
+  s_f76373887302cf::t_e2d7ab512bf46d 22-25
+internal/http/handler/session.go
+  s_f76373887302cf::t_50d4d0a9405f1a 323-325,333,338-342
+  s_f76373887302cf::t_1f05b33fa28a16 240-243,260-265,274
+  s_f76373887302cf::t_361e316292cf91 231
+  s_f76373887302cf::t_f125600b21ef0f 330-332,334-337
+openapi/openapi.yaml
+  s_f76373887302cf::t_69d95527d881fb 327-332,343-344
+  s_f76373887302cf::t_4091d30b5435b2 366-371
+  s_f76373887302cf::t_7def0daa58850d 529-533,545-548
+  s_f76373887302cf::t_c2c513ff00c0fe 749-753,767
+  s_f76373887302cf::t_a5bf9007428740 929-934
+  s_f76373887302cf::t_71d81e3b25faab 162-165
+  s_f76373887302cf::t_1b0e8fba0ade16 787-790
+  s_f76373887302cf::t_28334ee1f69a23 569-572
+internal/adapter/postgres/lost_update_test.go
+  s_f76373887302cf::t_136c757d7e0cca 1-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "51932bf8b0030b7eed9122cdc8dd8ab8ffcfffe6",
+  "prompts": {},
+  "sessions": {
+    "s_f76373887302cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd3befaf-c6ad-4ab6-88d8-dec1b8de0b55",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
