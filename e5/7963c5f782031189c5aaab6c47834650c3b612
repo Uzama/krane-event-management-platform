@@ -1,0 +1,91 @@
+internal/adapter/postgres/user_repo.go
+  s_83cff89ca76034::t_6abfb3938f8e09 8
+  s_83cff89ca76034::t_7eaf3df47c04be 43
+  s_83cff89ca76034::t_1b9d6dc20c5c7b 1-7,9-42,44-67
+FAILURES.md
+  s_83cff89ca76034::t_caf58aeffc9eca 9
+internal/adapter/postgres/user_repo_test.go
+  s_83cff89ca76034::t_17caba5d2aff11 1-117
+FEATURES.md
+  s_83cff89ca76034::t_ae789a60b48a7c 23
+internal/http/middleware/auth_test.go
+  s_83cff89ca76034::t_33298d9844ad9f 42-49
+  s_83cff89ca76034::t_ae2c7aec53f8b3 1-3,5-7,9-12,14-41,50-101,107-117,161-209
+  s_83cff89ca76034::t_20a1aacd80143f 102-106,118-160
+  s_83cff89ca76034::t_f8094314bdaa9b 4,8,13
+internal/container/container.go
+  s_83cff89ca76034::t_ffa0a62b175b5a 8,10,14-16,20-25,29-33,36-38,47-57,59-63
+internal/domain/user/port.go
+  s_83cff89ca76034::t_dc1968cbd18f8d 1-11
+internal/http/middleware/auth_integration_test.go
+  s_83cff89ca76034::t_b9450332ea4268 263-267,271-275,277-279,285-289,292-295,297
+  s_83cff89ca76034::t_5476cbdb2c453a 5
+  s_83cff89ca76034::t_3bea440f85f50e 1-4,6-117,123-135,157-158,164-167,170-175,177-179,185-193,200,205-262,268-270,276,280-284,290-291,296,298-346
+  s_83cff89ca76034::t_101527fc1c7128 136-156,159-163,168-169,176,194-199,201-204
+  s_83cff89ca76034::t_aeacf255e5b730 118-122,180-184
+go.mod
+  s_83cff89ca76034::t_b8cee08143a243 6,8,32
+internal/domain/user/service.go
+  s_83cff89ca76034::t_8ac6e101e4768a 1-20
+internal/adapter/auth/verifier_test.go
+  s_83cff89ca76034::t_1902fb8c1e5a85 1-12,14-20,22-157,159-172,174-183,185-188,195-198,207-208,210-213,220-222,228,232-233,235-248,250-251,253-300,302-304,310-321
+  s_83cff89ca76034::t_b43d09c3fc4aaa 21
+  s_83cff89ca76034::t_83421058af461b 301
+  s_83cff89ca76034::t_a7688095c23688 189-194,199-206,214-219,223-227,229-231
+  s_83cff89ca76034::t_91f36ad66e28b9 158,173,184,209,234,249,252
+  s_83cff89ca76034::t_3fd95a61c280da 305-309
+  s_83cff89ca76034::t_667281d43e6216 13
+internal/domain/user/errors.go
+  s_83cff89ca76034::t_b73246c0546890 1-16
+internal/container/container_test.go
+  s_83cff89ca76034::t_3c69c72735bc39 48-86
+internal/domain/user/service_test.go
+  s_83cff89ca76034::t_9ef1f8589cc4e6 1-50
+internal/domain/user/entity.go
+  s_83cff89ca76034::t_a40ce7d01354f7 1-5,7-8,12,14-19
+  s_83cff89ca76034::t_63b2b325cbe871 6,9-11,13
+  s_83cff89ca76034::t_2a2b8c59c91c76 20-30
+docker-compose.yml
+  s_83cff89ca76034::t_4cf86346d5297c 47-57,62-74,76-78
+  s_83cff89ca76034::t_d6539506966c27 132-133
+  s_83cff89ca76034::t_28ff5edd2498e3 75
+Makefile
+  s_83cff89ca76034::t_f590cd05674756 137-148
+  s_83cff89ca76034::t_50b8cdbabde4c8 27
+  s_83cff89ca76034::t_b8ceb6c367ad95 49-50,53
+internal/utils/config_test.go
+  s_83cff89ca76034::t_5f943d258789d1 13,24-29,43-44,49-54
+.env.example
+  s_83cff89ca76034::t_03adf2abbca553 42-44,47-51
+  s_83cff89ca76034::t_35604dee67e87d 52
+internal/http/middleware/auth.go
+  s_83cff89ca76034::t_b227091ec84621 1-101
+internal/utils/config.go
+  s_83cff89ca76034::t_b86044cd4cbf38 13-18,26-31
+AUDIT.md
+  s_83cff89ca76034::t_6582e62b5d391a 116-139
+internal/adapter/auth/verifier.go
+  s_83cff89ca76034::t_85fd7fc489f016 45-48,61
+  s_83cff89ca76034::t_2701d4c4ceed70 52,57
+  s_83cff89ca76034::t_b27446ad4531bc 12-13
+  s_83cff89ca76034::t_b4df1ef56c6e47 1-11,14-44,50-51,53-56,58-60,62-63,65
+  s_83cff89ca76034::t_d9b19926ba154e 49,64
+go.sum
+  s_83cff89ca76034::t_ebed136fecee57 4-5,17-18,129-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "e57963c5f782031189c5aaab6c47834650c3b612",
+  "prompts": {},
+  "sessions": {
+    "s_83cff89ca76034": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ae40e9a4-ca8c-4ff6-a9a3-d5d37e79e925",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
