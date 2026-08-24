@@ -41,7 +41,10 @@ func TestRouter_Health_ResponseMatchesSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := apihttp.NewRouter(handler.NewHealthHandler(fakePinger{err: tt.pingErr}, discardLogger()))
+			router := apihttp.NewRouter(apihttp.RouterDeps{
+				Health: handler.NewHealthHandler(fakePinger{err: tt.pingErr}, discardLogger()),
+				Logger: discardLogger(),
+			})
 
 			req := httptest.NewRequest(http.MethodGet, "/health", nil)
 			rec := httptest.NewRecorder()

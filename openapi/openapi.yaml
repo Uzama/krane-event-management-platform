@@ -28,7 +28,203 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /v1/events:
+    post:
+      operationId: createEvent
+      summary: Create an event
+      description: >
+        Any authenticated user may create an event -- role_permissions has no
+        event:create row (item 07), since creating an event precedes any
+        event_members row to check. The creator is atomically granted an
+        admin event_members row on the new event (item 08).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventCreateRequest"
+      responses:
+        "201":
+          description: The created event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    get:
+      operationId: listEvents
+      summary: List events the caller is a member of
+      description: >
+        Scoped to the caller's event_members rows -- access is membership
+        (docs/requirements.md §4 point 3), not a per-resource Can() check.
+        Keyset-paginated over (created_at, id); never OFFSET.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque token from a previous response's next_cursor.
+      responses:
+        "200":
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "400":
+          description: The cursor query parameter is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /v1/events/{eventId}:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getEvent
+      summary: Get an event
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      operationId: patchEvent
+      summary: Update an event
+      description: >
+        Version-gated: the request's version must match the row's current
+        version or the write is rejected as a conflict (item 17's
+        lost-update protection, introduced here). starts_at and ends_at
+        must be provided together or not at all.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventPatchRequest"
+      responses:
+        "200":
+          description: The updated event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      operationId: deleteEvent
+      summary: Delete (soft-delete) an event
+      description: >
+        version is required as a query parameter -- there is no ETag/If-Match
+        middleware yet; this is the interim mechanism for events alone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: The event was soft-deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: >
+        The caller lacks permission. Never distinguishes a non-existent
+        event from one the caller isn't a member of (item 07).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: The event does not exist or is soft-deleted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: The event's version no longer matches (lost-update protection).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationFailed:
+      description: The request body or query parameters failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
   schemas:
     HealthStatus:
       type: object
@@ -68,3 +264,115 @@ components:
             details:
               type: object
               additionalProperties: true
+
+    # internal/http/response/event.go's EventResponse, field for field. No
+    # deleted_at -- a soft-deleted event surfaces as 404, never a visible
+    # flag. No roster/email to hide (item 10 is about the member resource,
+    # not this one).
+    Event:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - description
+        - timezone
+        - starts_at
+        - ends_at
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          description: IANA timezone name, e.g. Asia/Colombo.
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EventList:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        next_cursor:
+          type: string
+          description: Opaque keyset cursor. Absent when there is no further page.
+
+    # internal/http/request/event.go's CreateEventRequest. All fields
+    # required -- there is no absent-vs-null distinction to make on create.
+    EventCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - timezone
+        - starts_at
+        - ends_at
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+
+    # internal/http/request/event.go's PatchEventRequest. Every field but
+    # version is optional AND nullable (domain/opt.Optional[T] on the Go
+    # side) -- OpenAPI 3.0 can only declare a field optional-or-nullable,
+    # not the three-way absent/null/value distinction itself; that
+    # distinction is enforced by the hand-written request DTO, not this
+    # schema (CLAUDE.md's PATCH-semantics invariant).
+    EventPatchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          description: Must match the event's current version (optimistic lock).
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time

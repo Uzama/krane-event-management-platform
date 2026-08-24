@@ -24,7 +24,14 @@ func Boot(ctx context.Context) error {
 	}
 	defer c.Close()
 
-	router := apihttp.NewRouter(handler.NewHealthHandler(c.DB, c.Logger))
+	router := apihttp.NewRouter(apihttp.RouterDeps{
+		Health:       handler.NewHealthHandler(c.DB, c.Logger),
+		Event:        handler.NewEventHandler(c.Events, c.Logger),
+		AuthVerifier: c.AuthVerifier,
+		Users:        c.Users,
+		Authz:        c.Authz,
+		Logger:       c.Logger,
+	})
 	srv := apihttp.NewServer(cfg, router)
 
 	ln, err := net.Listen("tcp", srv.Addr)
