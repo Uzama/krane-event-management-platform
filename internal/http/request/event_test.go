@@ -145,6 +145,81 @@ func TestPatchEventRequest_Validate_RejectsEndsAtNotAfterStartsAtWhenBothSet(t *
 	}
 }
 
+// TestPatchEventRequest_Validate_RejectsExplicitNullForName is item 20's
+// missing coverage on the non-nullable half of Name's three states: the
+// existing RejectsBlankName-style test only sent whitespace (""), never
+// proving that a literal JSON null -- which opt.Optional[string] accepts
+// silently as Set=true, Value="" (encoding/json's documented no-op-on-null
+// behavior for a non-pointer destination) -- is actually caught by the
+// same TrimSpace=="" check, not merely assumed to be from reading the code.
+func TestPatchEventRequest_Validate_RejectsExplicitNullForName(t *testing.T) {
+	var r request.PatchEventRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "name": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.Name.Set {
+		t.Fatalf("Name.Set = false, want true (opt.Optional[string] treats null as Set=true, Value=\"\")")
+	}
+	issues := r.Validate()
+	if _, ok := issues["name"]; !ok {
+		t.Fatalf("issues missing name: %v -- explicit null must be rejected, not silently applied as a blank name", issues)
+	}
+}
+
+// TestPatchEventRequest_Validate_RejectsExplicitNullForTimezone is item
+// 20's missing coverage: no test exercised PatchEventRequest's timezone
+// validation at all before this (only CreateEventRequest's was tested).
+func TestPatchEventRequest_Validate_RejectsExplicitNullForTimezone(t *testing.T) {
+	var r request.PatchEventRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "timezone": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.Timezone.Set {
+		t.Fatalf("Timezone.Set = false, want true")
+	}
+	issues := r.Validate()
+	if _, ok := issues["timezone"]; !ok {
+		t.Fatalf("issues missing timezone: %v -- explicit null must be rejected", issues)
+	}
+}
+
+// TestPatchEventRequest_Validate_AcceptsValidTimezoneOnPatch is the
+// positive control for the test above -- proves a real timezone value on
+// PATCH passes validation, so the null test isn't vacuously trivial (e.g.
+// failing to unmarshal at all would also produce a "timezone" issue for
+// the wrong reason).
+func TestPatchEventRequest_Validate_AcceptsValidTimezoneOnPatch(t *testing.T) {
+	var r request.PatchEventRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "timezone": "Asia/Colombo"}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if issues := r.Validate(); len(issues) != 0 {
+		t.Fatalf("got issues %v, want none", issues)
+	}
+}
+
+// TestPatchEventRequest_Validate_RejectsExplicitNullForBothStartsAndEnds
+// is item 20's missing coverage: the existing starts_at/ends_at tests all
+// use real timestamps (one-sided, both-set, ends-before-starts); none
+// proves null-for-both is rejected. time.Time's own UnmarshalJSON treats a
+// literal null as a no-op (leaves the zero value), so both fields land at
+// Set=true, Value=zero-time -- this must fail the ends_at-after-starts_at
+// check (zero.After(zero) is false), not be silently accepted as "no
+// change" the way an absent pair would be.
+func TestPatchEventRequest_Validate_RejectsExplicitNullForBothStartsAndEnds(t *testing.T) {
+	var r request.PatchEventRequest
+	if err := json.Unmarshal([]byte(`{"version": 1, "starts_at": null, "ends_at": null}`), &r); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !r.StartsAt.Set || !r.EndsAt.Set {
+		t.Fatalf("got StartsAt.Set=%v EndsAt.Set=%v, want both true", r.StartsAt.Set, r.EndsAt.Set)
+	}
+	issues := r.Validate()
+	if len(issues) == 0 {
+		t.Fatal("got no issues, want an ends_at error -- null-for-both must not be silently accepted")
+	}
+}
+
 func TestPatchEventRequest_Validate_DistinguishesAbsentNullAndValueForDescription(t *testing.T) {
 	t.Run("absent", func(t *testing.T) {
 		var r request.PatchEventRequest
