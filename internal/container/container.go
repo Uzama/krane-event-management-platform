@@ -15,6 +15,7 @@ import (
 	"github.com/Uzama/krane-event-management-platform/internal/adapter/authz"
 	"github.com/Uzama/krane-event-management-platform/internal/adapter/postgres"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/event"
+	"github.com/Uzama/krane-event-management-platform/internal/domain/invitation"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/member"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/room"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/session"
@@ -41,6 +42,7 @@ type Container struct {
 	Members      *member.Service
 	Rooms        *room.Service
 	Sessions     *session.Service
+	Invitations  *invitation.Service
 }
 
 // New builds every dependency and proves the database and the OIDC issuer
@@ -75,6 +77,7 @@ func New(ctx context.Context, cfg utils.Config) (*Container, error) {
 	members := member.NewService(postgres.NewMemberRepository(pool))
 	rooms := room.NewService(postgres.NewRoomRepository(pool))
 	sessions := session.NewService(postgres.NewSessionRepository(pool))
+	invitations := invitation.NewService(postgres.NewInvitationRepository(pool))
 
 	return &Container{
 		Config:       cfg,
@@ -87,6 +90,7 @@ func New(ctx context.Context, cfg utils.Config) (*Container, error) {
 		Members:      members,
 		Rooms:        rooms,
 		Sessions:     sessions,
+		Invitations:  invitations,
 	}, nil
 }
 

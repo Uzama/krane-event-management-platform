@@ -776,6 +776,108 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /v1/events/{eventId}/invitations:
+    parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createInvitation
+      summary: Invite someone to an event
+      description: >
+        An independent record, not a pre-membership state machine (D1) --
+        creating an invitation never touches event_members. email need not
+        belong to an existing user (D2): user_id resolves atomically at
+        invite time if a matching account exists, and stays null
+        permanently otherwise -- it is never re-resolved later if the
+        invitee signs up afterward. Only an admin may invite at any role;
+        a contributor may invite attendee only (403 cannot_invite_at_role
+        otherwise) -- the same escalation guard item 09's add-member uses,
+        shared verbatim. There is no update or delete path: a wrong-role
+        invitation cannot be corrected via this API once created, only
+        re-sent under a different email or left as-is.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationCreateRequest"
+      responses:
+        "201":
+          description: The created invitation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invitation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Either the caller has no invitation:create permission on this
+            event (forbidden), or the caller is a contributor attempting to
+            invite above attendee (cannot_invite_at_role).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: This event already has an invitation for that email.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    get:
+      operationId: listInvitations
+      summary: List an event's invitations
+      description: >
+        Keyset-paginated over (created_at, id); never OFFSET. admin and
+        contributor only -- attendee has no invitation:read permission.
+        Email is visible to both roles (D14) -- a scoped exception to D11,
+        since the email is data the caller supplied, not roster PII.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque token from a previous response's next_cursor.
+      responses:
+        "200":
+          description: A page of the event's invitations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationList"
+        "400":
+          description: The cursor query parameter is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1290,3 +1392,80 @@ components:
         ends_at:
           type: string
           description: Local wall-clock time, no offset. Must be provided together with starts_at.
+
+    # internal/http/response/invitation.go's InvitationResponse, field for
+    # field. Unlike Member, user_email has no role-gated visibility -- D14:
+    # email is visible to every role that can reach this route (admin and
+    # contributor; attendee has no invitation:read permission at all),
+    # since it's data the caller supplied to create the record, not roster
+    # PII someone else added. user_id is nullable and required (present as
+    # an explicit null, never omitted) -- D2: it resolves once at invite
+    # time if the email matches an existing account, and stays null
+    # permanently otherwise.
+    Invitation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - event_id
+        - user_id
+        - email
+        - role
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, contributor, attendee]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    InvitationList:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invitation"
+        next_cursor:
+          type: string
+          description: Opaque keyset cursor. Absent when there is no further page.
+
+    # internal/http/request/invitation.go's InvitationCreateRequest. role is
+    # shape-validated here (must be a known role) but NOT restricted by
+    # caller -- whether a contributor may invite at that role is an
+    # authorization decision, answered 403 cannot_invite_at_role by the
+    # repository, never 422 here.
+    InvitationCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, contributor, attendee]

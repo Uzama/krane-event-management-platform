@@ -30,6 +30,7 @@ func Boot(ctx context.Context) error {
 		Member:       handler.NewMemberHandler(c.Members, c.Logger),
 		Room:         handler.NewRoomHandler(c.Rooms, c.Logger),
 		Session:      handler.NewSessionHandler(c.Sessions, c.Events, c.Logger),
+		Invitation:   handler.NewInvitationHandler(c.Invitations, c.Logger),
 		AuthVerifier: c.AuthVerifier,
 		Users:        c.Users,
 		Authz:        c.Authz,

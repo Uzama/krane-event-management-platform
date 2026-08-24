@@ -94,9 +94,11 @@ func (r eventMemberRow) toMember(email, name string) member.Member {
 // Create resolves in.Email to an existing user and grants them in.Role on
 // eventID, in one atomic statement: the same INSERT...SELECT both resolves
 // the email and enforces that actorID may grant that role (only an admin
-// may grant anything but attendee), so there is no separate privilege
-// check that could race the insert. Verified against real Postgres 18.6
-// before this was written -- see the feature-09 plan's Gate-0 proof.
+// may grant anything but attendee -- see roles.go's canGrantRoleGuard,
+// shared verbatim with InvitationRepository.Create, item 13), so there is
+// no separate privilege check that could race the insert. Verified against
+// real Postgres 18.6 before this was written -- see the feature-09 plan's
+// Gate-0 proof.
 func (r *MemberRepository) Create(ctx context.Context, actorID, eventID string, in member.CreateInput) (member.Member, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -106,14 +108,14 @@ func (r *MemberRepository) Create(ctx context.Context, actorID, eventID string, 
 
 	const insert = `
 		WITH actor AS (
-			SELECT role FROM event_members WHERE event_id = $1 AND user_id = $4
+			` + canGrantRoleActorCTE + `
 		),
 		new_member AS (
 			INSERT INTO event_members (event_id, user_id, role)
 			SELECT $1, u.id, $3
 			FROM users u
 			WHERE u.email = $2
-			  AND ($3 = 'attendee' OR EXISTS (SELECT 1 FROM actor WHERE actor.role = 'admin'))
+			  AND ` + canGrantRoleGuard + `
 			RETURNING id, event_id, user_id, role, version, created_at, updated_at
 		)
 		SELECT
