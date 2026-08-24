@@ -21,6 +21,13 @@ POSTGRES_PASSWORD  ?= dev_only_migrator
 POSTGRES_DB        ?= krane
 POSTGRES_PORT      ?= 5432
 POSTGRES_TEST_DB   ?= krane_test
+# cmd/seed's own tests need full-table DELETEs (Truncate) to prove the real
+# thing, which would race every other package sharing POSTGRES_TEST_DB (see
+# CLAUDE.md's "Isolation is per-package, never per-test" / FAILURES.md's
+# keyset-tie-break note on shared-database assumptions) -- so it gets its
+# own database, per CLAUDE.md's own anticipated escape hatch: "CREATE
+# DATABASE <pkg> TEMPLATE krane_test".
+POSTGRES_SEED_TEST_DB ?= cmd_seed
 KRANE_APP_USER     ?= krane_app
 KRANE_APP_PASSWORD ?= dev_only_app
 OIDC_PORT          ?= 9090
@@ -37,6 +44,15 @@ DEV_KRANE_APP_PASSWORD := dev_only_app
 # the migrator.
 DATABASE_URL      ?= postgres://$(KRANE_APP_USER):$(KRANE_APP_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 TEST_DATABASE_URL ?= postgres://$(KRANE_APP_USER):$(KRANE_APP_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_TEST_DB)?sslmode=disable
+
+# Host-facing DSNs, as krane_migrator -- cmd/seed connects as the migrator,
+# not krane_app: seeding is an offline, admin-style data-load (truncate +
+# bulk load), and krane_app deliberately has no DELETE/TRUNCATE grant on
+# audit_log (item 02, append-only) that a re-seed after real API activity
+# needs (FEATURES.md item 14). TEST_SEED_DATABASE_URL is the same role
+# against krane_test, for cmd/seed's own integration tests.
+SEED_DATABASE_URL      ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
+TEST_SEED_DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_SEED_TEST_DB)?sslmode=disable
 
 # Migration DSNs run inside the compose network, as krane_migrator.
 MIGRATE_URL_DEV  := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
@@ -71,9 +87,9 @@ up: guard-production-credentials ## Start Postgres + mock OIDC and migrate (idem
 	docker compose run --rm app-role
 	@echo "up: ready. api $(DATABASE_URL) | oidc $(OIDC_DISCOVERY)"
 
-seed: ## Load demo data (stub until item 14)
-	@echo "seed: stub. Real seed data -- 50 events / 5k users / 50k invitations,"
-	@echo "      across time zones and crossing a DST boundary -- is item 14 in FEATURES.md."
+seed: up ## Load 50 events / 5k users / 50k invitations (idempotent -- safe to re-run)
+	@./scripts/require-go.sh
+	go run ./cmd/seed
 
 test: up ## Run the suite against a freshly migrated throwaway database
 	@./scripts/require-go.sh
@@ -83,6 +99,11 @@ test: up ## Run the suite against a freshly migrated throwaway database
 			-c 'DROP DATABASE IF EXISTS "$(POSTGRES_TEST_DB)" WITH (FORCE)' \
 			-c 'CREATE DATABASE "$(POSTGRES_TEST_DB)"'
 	docker compose run --rm migrate -database "$(MIGRATE_URL_TEST)" up
+	@echo "test: recreating $(POSTGRES_SEED_TEST_DB) (cmd/seed's own database -- see the comment on POSTGRES_SEED_TEST_DB)"
+	@docker compose exec -T -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres \
+		psql -v ON_ERROR_STOP=1 -U "$(POSTGRES_USER)" -d postgres --quiet \
+			-c 'DROP DATABASE IF EXISTS "$(POSTGRES_SEED_TEST_DB)" WITH (FORCE)' \
+			-c 'CREATE DATABASE "$(POSTGRES_SEED_TEST_DB)" TEMPLATE "$(POSTGRES_TEST_DB)"'
 	go test ./... -race -count=1
 
 lint: ## gofmt + go vet + golangci-lint (pinned image, no host install)
