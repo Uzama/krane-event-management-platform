@@ -10,6 +10,12 @@ type Config struct {
 	HTTPPort    string
 	DatabaseURL string
 	LogLevel    string
+
+	// OIDCIssuerURL is the mock issuer locally, a hosted IdP in prod --
+	// swapping one is a single env var, never a code change (CLAUDE.md).
+	OIDCIssuerURL string
+	// OIDCAudience is the aud claim every validated token must carry.
+	OIDCAudience string
 }
 
 // Load reads Config from the environment, falling back to the same dev
@@ -17,10 +23,12 @@ type Config struct {
 // with no .env runs `go run ./cmd/api` against `make up`'s stack untouched.
 func Load() Config {
 	return Config{
-		Env:         getEnv("ENV", "development"),
-		HTTPPort:    getEnv("HTTP_PORT", "8080"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://krane_app:dev_only_app@localhost:5432/krane?sslmode=disable"),
-		LogLevel:    getEnv("LOG_LEVEL", "info"),
+		Env:           getEnv("ENV", "development"),
+		HTTPPort:      getEnv("HTTP_PORT", "8080"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgres://krane_app:dev_only_app@localhost:5432/krane?sslmode=disable"),
+		LogLevel:      getEnv("LOG_LEVEL", "info"),
+		OIDCIssuerURL: getEnv("OIDC_ISSUER_URL", "http://localhost:9090/default"),
+		OIDCAudience:  getEnv("OIDC_AUDIENCE", "krane-api"),
 	}
 }
 
