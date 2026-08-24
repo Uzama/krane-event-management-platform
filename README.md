@@ -19,7 +19,8 @@ No other setup is required. `.env.example` documents every value the commands ab
 ### Prerequisites
 
 - Docker + Docker Compose
-- Go 1.23+ (only needed on the host to run `go test`/`go run`; Postgres, migrations, and the mock OIDC issuer all run in containers)
+
+That's it — `make up`, `make seed`, and `make test` all run entirely in containers (Postgres, the mock OIDC issuer, migrations, and now `go run`/`go test` too, via a pinned `golang:1.23.12-alpine` toolchain container). No host Go install is required for the graded path. Go 1.23+ on the host is only needed for `make lint`/`make generate`/`make contract-check`, which aren't part of `make up && make seed && make test`.
 
 ### `make up` — start Postgres + mock OIDC, migrated
 
@@ -49,7 +50,7 @@ make token USER=admin        # or contributor / attendee
 make test
 ```
 
-Recreates a throwaway `krane_test` database, migrates it fresh, and runs the full Go test suite (`go test ./... -race -count=1`) against real Postgres — no mocks for repository or integration tests. This is what CI runs on every push, alongside `make lint`.
+Recreates a throwaway `krane_test` database, migrates it fresh, and runs the full Go test suite (`go test ./... -race -count=1`) inside the same toolchain container, against real Postgres over the compose network — no mocks for repository or integration tests. This is what CI runs on every push, alongside `make lint`. Use `make test-verbose` (adds `-v`) for local debugging; it's not part of the graded path.
 
 ### `make lint` — static checks
 

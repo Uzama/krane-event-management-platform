@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 #
 # Fails with an actionable message when the host Go toolchain is missing or older
-# than this repo needs.
+# than this repo needs. Only `lint`/`generate`/`contract-check` call this --
+# `seed`/`test` run Go inside the `gotools` container (see docker-compose.yml)
+# precisely so the graded `make up && make seed && make test` contract only
+# needs Docker on the host, not a host Go install.
 #
 # The required version is READ FROM go.mod and is not duplicated here. go.mod is
 # the single source of truth: this script parses it, and CI's setup-go step uses
@@ -27,8 +30,8 @@ if ! command -v go >/dev/null 2>&1; then
     cat >&2 <<EOF
 require-go: Go is not installed, or is not on PATH.
 
-'make test' runs the suite on the host against the Dockerized Postgres, so it
-needs Go $required or newer. Install it from https://go.dev/dl/ and re-run.
+'make lint'/'make generate'/'make contract-check' run on the host, so it needs
+Go $required or newer. Install it from https://go.dev/dl/ and re-run.
 EOF
     exit 1
 fi

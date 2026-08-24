@@ -58,6 +58,14 @@ TEST_SEED_DATABASE_URL ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@local
 MIGRATE_URL_DEV  := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
 MIGRATE_URL_TEST := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_TEST_DB)?sslmode=disable
 
+# In-network equivalents of the host-facing DSNs/URLs above, for `gotools`
+# (seed/test run inside the compose network, so "localhost" would not
+# resolve to postgres/oidc -- same reasoning as MIGRATE_URL_DEV/TEST).
+SEED_DATABASE_URL_INNET      := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
+TEST_DATABASE_URL_INNET      := postgres://$(KRANE_APP_USER):$(KRANE_APP_PASSWORD)@postgres:5432/$(POSTGRES_TEST_DB)?sslmode=disable
+TEST_SEED_DATABASE_URL_INNET := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_SEED_TEST_DB)?sslmode=disable
+OIDC_ISSUER_URL_INNET        := http://oidc:8080/default
+
 # Pinned so local and CI run byte-identical versions; lint cannot pass here and
 # fail there.
 GOLANGCI_LINT_IMAGE := golangci/golangci-lint:v1.62.2-alpine
@@ -66,7 +74,7 @@ OIDC_DISCOVERY   := http://localhost:$(OIDC_PORT)/default/.well-known/openid-con
 OIDC_ISSUER_URL  := http://localhost:$(OIDC_PORT)/default
 
 .DEFAULT_GOAL := help
-.PHONY: help up down seed test lint generate contract-check migrate-up migrate-down psql guard-production-credentials wait-oidc token
+.PHONY: help up down seed test test-verbose test-db-reset lint generate contract-check migrate-up migrate-down psql guard-production-credentials wait-oidc token
 
 help: ## Show the available targets
 	@echo "Event Management Platform"
@@ -88,11 +96,26 @@ up: guard-production-credentials ## Start Postgres + mock OIDC and migrate (idem
 	@echo "up: ready. api $(DATABASE_URL) | oidc $(OIDC_DISCOVERY)"
 
 seed: up ## Load 50 events / 5k users / 50k invitations (idempotent -- safe to re-run)
-	@./scripts/require-go.sh
-	go run ./cmd/seed
+	docker compose run --rm \
+		-e SEED_DATABASE_URL="$(SEED_DATABASE_URL_INNET)" \
+		-e OIDC_ISSUER_URL="$(OIDC_ISSUER_URL_INNET)" \
+		gotools go run ./cmd/seed
 
-test: up ## Run the suite against a freshly migrated throwaway database
-	@./scripts/require-go.sh
+test: test-db-reset ## Run the suite against a freshly migrated throwaway database
+	docker compose run --rm \
+		-e TEST_DATABASE_URL="$(TEST_DATABASE_URL_INNET)" \
+		-e TEST_SEED_DATABASE_URL="$(TEST_SEED_DATABASE_URL_INNET)" \
+		-e OIDC_ISSUER_URL="$(OIDC_ISSUER_URL_INNET)" \
+		gotools go test ./... -race -count=1
+
+test-verbose: test-db-reset ## Like test, but with go test -v -- local debugging only, not the graded path
+	docker compose run --rm \
+		-e TEST_DATABASE_URL="$(TEST_DATABASE_URL_INNET)" \
+		-e TEST_SEED_DATABASE_URL="$(TEST_SEED_DATABASE_URL_INNET)" \
+		-e OIDC_ISSUER_URL="$(OIDC_ISSUER_URL_INNET)" \
+		gotools go test ./... -race -count=1 -v
+
+test-db-reset: up
 	@echo "test: recreating $(POSTGRES_TEST_DB)"
 	@docker compose exec -T -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres \
 		psql -v ON_ERROR_STOP=1 -U "$(POSTGRES_USER)" -d postgres --quiet \
@@ -104,7 +127,6 @@ test: up ## Run the suite against a freshly migrated throwaway database
 		psql -v ON_ERROR_STOP=1 -U "$(POSTGRES_USER)" -d postgres --quiet \
 			-c 'DROP DATABASE IF EXISTS "$(POSTGRES_SEED_TEST_DB)" WITH (FORCE)' \
 			-c 'CREATE DATABASE "$(POSTGRES_SEED_TEST_DB)" TEMPLATE "$(POSTGRES_TEST_DB)"'
-	go test ./... -race -count=1
 
 lint: ## gofmt + go vet + golangci-lint (pinned image, no host install)
 	@./scripts/require-go.sh
