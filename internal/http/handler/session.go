@@ -285,13 +285,17 @@ func (h *SessionHandler) writeEventLookupError(w http.ResponseWriter, logMsg, ev
 }
 
 // writeCreateOrUpdateError maps CreateSession's error vocabulary:
-// session.ErrInvalidRoom/ErrInvalidSpeaker are create-only.
+// session.ErrInvalidRoom/ErrInvalidSpeaker are create-only. ErrConflict
+// (item 16) means the room or speaker is already booked for an overlapping
+// time_range -- sessions_room_no_overlap_excl / sessions_speaker_no_overlap_excl.
 func (h *SessionHandler) writeCreateOrUpdateError(w http.ResponseWriter, logMsg, eventID string, err error) {
 	switch {
 	case errors.Is(err, session.ErrInvalidRoom):
 		h.writeError(w, http.StatusNotFound, "room_not_found", "room_id must reference an existing room within this event")
 	case errors.Is(err, session.ErrInvalidSpeaker):
 		h.writeError(w, http.StatusNotFound, "speaker_not_found", "speaker_id must reference an existing user")
+	case errors.Is(err, domain.ErrConflict):
+		h.writeError(w, http.StatusConflict, "session_conflict", "that room or speaker is already booked for an overlapping time")
 	default:
 		h.logger.Error(logMsg, "event_id", eventID, "error", err)
 		h.writeInternalError(w)

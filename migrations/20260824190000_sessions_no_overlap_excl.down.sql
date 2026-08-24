@@ -1,0 +1,2 @@
+ALTER TABLE sessions DROP CONSTRAINT sessions_speaker_no_overlap_excl;
+ALTER TABLE sessions DROP CONSTRAINT sessions_room_no_overlap_excl;

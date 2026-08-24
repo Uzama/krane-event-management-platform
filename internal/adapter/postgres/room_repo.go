@@ -21,6 +21,11 @@ import (
 // a room that still has sessions referencing it fires this.
 const foreignKeyViolation = "23503"
 
+// exclusionViolation is Postgres's SQLSTATE for an EXCLUDE constraint
+// violation -- item 16's sessions_room_no_overlap_excl /
+// sessions_speaker_no_overlap_excl fire this.
+const exclusionViolation = "23P01"
+
 // RoomRepository implements domain/room.Repository.
 type RoomRepository struct {
 	pool *pgxpool.Pool

@@ -268,7 +268,14 @@ func TestSessionRepository_List_PaginatesWithoutSkipOrDuplicate(t *testing.T) {
 
 	want := make(map[string]bool)
 	for i := 0; i < 4; i++ {
-		created, err := repo.Create(ctx, creator, ev.ID, validSessionInput(rm.ID, speaker, fmt.Sprintf("List session %d %s", i, uniqueSubject(t))))
+		// Staggered by 2h per session (item 16's EXCLUDE now rejects the
+		// identical, overlapping time_range validSessionInput would
+		// otherwise give every call for the same room/speaker).
+		in := validSessionInput(rm.ID, speaker, fmt.Sprintf("List session %d %s", i, uniqueSubject(t)))
+		offset := time.Duration(i) * 2 * time.Hour
+		in.StartsAt = in.StartsAt.Add(offset)
+		in.EndsAt = in.EndsAt.Add(offset)
+		created, err := repo.Create(ctx, creator, ev.ID, in)
 		if err != nil {
 			t.Fatalf("Create #%d: %v", i, err)
 		}
@@ -345,14 +352,25 @@ func TestSessionRepository_List_ScopesToEventAndExcludesSoftDeleted(t *testing.T
 		t.Fatalf("creating test room: %v", err)
 	}
 
-	if _, err := repo.Create(ctx, creator, ev2.ID, validSessionInput(rm2.ID, speaker, "In ev2 "+uniqueSubject(t))); err != nil {
+	// Staggered 4h earlier so item 16's speaker EXCLUDE (cross-event by
+	// design -- speaker_id has no event scoping, D3) doesn't reject this as
+	// double-booking the same speaker "Kept" also uses.
+	ev2In := validSessionInput(rm2.ID, speaker, "In ev2 "+uniqueSubject(t))
+	ev2In.StartsAt = ev2In.StartsAt.Add(-4 * time.Hour)
+	ev2In.EndsAt = ev2In.EndsAt.Add(-4 * time.Hour)
+	if _, err := repo.Create(ctx, creator, ev2.ID, ev2In); err != nil {
 		t.Fatalf("Create (ev2): %v", err)
 	}
 	kept, err := repo.Create(ctx, creator, ev1.ID, validSessionInput(rm1.ID, speaker, "Kept "+uniqueSubject(t)))
 	if err != nil {
 		t.Fatalf("Create (kept): %v", err)
 	}
-	deleted, err := repo.Create(ctx, creator, ev1.ID, validSessionInput(rm1.ID, speaker, "Deleted "+uniqueSubject(t)))
+	// Staggered 2h later so item 16's EXCLUDE doesn't reject this as
+	// overlapping "Kept" in the same room with the same speaker.
+	deletedIn := validSessionInput(rm1.ID, speaker, "Deleted "+uniqueSubject(t))
+	deletedIn.StartsAt = deletedIn.StartsAt.Add(2 * time.Hour)
+	deletedIn.EndsAt = deletedIn.EndsAt.Add(2 * time.Hour)
+	deleted, err := repo.Create(ctx, creator, ev1.ID, deletedIn)
 	if err != nil {
 		t.Fatalf("Create (to delete): %v", err)
 	}

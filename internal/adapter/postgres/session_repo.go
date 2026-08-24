@@ -103,6 +103,14 @@ func (r *SessionRepository) Create(ctx context.Context, actorID, eventID string,
 		if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation && pgErr.ConstraintName == "sessions_speaker_id_fkey" {
 			return session.Session{}, session.ErrInvalidSpeaker
 		}
+		if errors.As(err, &pgErr) && pgErr.Code == exclusionViolation {
+			// Either sessions_room_no_overlap_excl or
+			// sessions_speaker_no_overlap_excl (item 16) -- both mean the
+			// same thing to the caller: this slot conflicts with an
+			// existing booking. domain.ErrConflict is the one vocabulary
+			// http maps to 409, same as room_repo.go's name collision.
+			return session.Session{}, domain.ErrConflict
+		}
 		return session.Session{}, fmt.Errorf("creating session: %w", err)
 	}
 
