@@ -19,6 +19,48 @@ const (
 	BearerAuthScopes = "bearerAuth.Scopes"
 )
 
+// Defines values for InvitationRole.
+const (
+	InvitationRoleAdmin       InvitationRole = "admin"
+	InvitationRoleAttendee    InvitationRole = "attendee"
+	InvitationRoleContributor InvitationRole = "contributor"
+)
+
+// Valid indicates whether the value is a known member of the InvitationRole enum.
+func (e InvitationRole) Valid() bool {
+	switch e {
+	case InvitationRoleAdmin:
+		return true
+	case InvitationRoleAttendee:
+		return true
+	case InvitationRoleContributor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationCreateRequestRole.
+const (
+	InvitationCreateRequestRoleAdmin       InvitationCreateRequestRole = "admin"
+	InvitationCreateRequestRoleAttendee    InvitationCreateRequestRole = "attendee"
+	InvitationCreateRequestRoleContributor InvitationCreateRequestRole = "contributor"
+)
+
+// Valid indicates whether the value is a known member of the InvitationCreateRequestRole enum.
+func (e InvitationCreateRequestRole) Valid() bool {
+	switch e {
+	case InvitationCreateRequestRoleAdmin:
+		return true
+	case InvitationCreateRequestRoleAttendee:
+		return true
+	case InvitationCreateRequestRoleContributor:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MemberRole.
 const (
 	MemberRoleAdmin       MemberRole = "admin"
@@ -139,6 +181,37 @@ type EventPatchRequest struct {
 type HealthStatus struct {
 	Database string `json:"database"`
 	Status   string `json:"status"`
+}
+
+// Invitation defines model for Invitation.
+type Invitation struct {
+	CreatedAt time.Time           `json:"created_at"`
+	Email     openapi_types.Email `json:"email"`
+	EventId   openapi_types.UUID  `json:"event_id"`
+	Id        openapi_types.UUID  `json:"id"`
+	Role      InvitationRole      `json:"role"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	UserId    *openapi_types.UUID `json:"user_id"`
+}
+
+// InvitationRole defines model for Invitation.Role.
+type InvitationRole string
+
+// InvitationCreateRequest defines model for InvitationCreateRequest.
+type InvitationCreateRequest struct {
+	Email openapi_types.Email         `json:"email"`
+	Role  InvitationCreateRequestRole `json:"role"`
+}
+
+// InvitationCreateRequestRole defines model for InvitationCreateRequest.Role.
+type InvitationCreateRequestRole string
+
+// InvitationList defines model for InvitationList.
+type InvitationList struct {
+	Data []Invitation `json:"data"`
+
+	// NextCursor Opaque keyset cursor. Absent when there is no further page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 // Member defines model for Member.
@@ -308,6 +381,14 @@ type DeleteEventParams struct {
 	Version int `form:"version" json:"version"`
 }
 
+// ListInvitationsParams defines parameters for ListInvitations.
+type ListInvitationsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque token from a previous response's next_cursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -353,6 +434,9 @@ type CreateEventJSONRequestBody = EventCreateRequest
 // PatchEventJSONRequestBody defines body for PatchEvent for application/json ContentType.
 type PatchEventJSONRequestBody = EventPatchRequest
 
+// CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
+type CreateInvitationJSONRequestBody = InvitationCreateRequest
+
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = MemberCreateRequest
 
@@ -391,6 +475,12 @@ type ServerInterface interface {
 	// Update an event
 	// (PATCH /v1/events/{eventId})
 	PatchEvent(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
+	// List an event's invitations
+	// (GET /v1/events/{eventId}/invitations)
+	ListInvitations(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListInvitationsParams)
+	// Invite someone to an event
+	// (POST /v1/events/{eventId}/invitations)
+	CreateInvitation(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID)
 	// List an event's roster
 	// (GET /v1/events/{eventId}/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, eventId openapi_types.UUID, params ListMembersParams)
@@ -621,6 +711,87 @@ func (siw *ServerInterfaceWrapper) PatchEvent(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PatchEvent(w, r, eventId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvitations operation middleware
+func (siw *ServerInterfaceWrapper) ListInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListInvitationsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvitations(w, r, eventId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvitation operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "eventId" -------------
+	var eventId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "eventId", r.PathValue("eventId"), &eventId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "eventId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvitation(w, r, eventId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1373,6 +1544,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}", wrapper.DeleteEvent)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}", wrapper.GetEvent)
 	m.HandleFunc("PATCH "+options.BaseURL+"/v1/events/{eventId}", wrapper.PatchEvent)
+	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.ListInvitations)
+	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/invitations", wrapper.CreateInvitation)
 	m.HandleFunc("GET "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.ListMembers)
 	m.HandleFunc("POST "+options.BaseURL+"/v1/events/{eventId}/members", wrapper.CreateMember)
 	m.HandleFunc("DELETE "+options.BaseURL+"/v1/events/{eventId}/members/{memberId}", wrapper.RemoveMember)

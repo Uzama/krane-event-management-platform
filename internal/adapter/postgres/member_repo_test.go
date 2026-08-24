@@ -178,6 +178,37 @@ func TestMemberRepository_Create_ContributorCanGrantAttendee(t *testing.T) {
 	}
 }
 
+// TestMemberRepository_Create_NonMemberActor_CannotGrantEvenAttendee proves
+// roles.go's canGrantRoleGuard fails CLOSED: an actor with no event_members
+// row on this event at all must be denied every grant, including
+// role=attendee -- not just non-attendee roles. Without the
+// EXISTS(SELECT 1 FROM actor) term, a non-member could silently grant
+// themselves or anyone else attendee membership via this repository method.
+// This repo call bypasses the http/middleware Authz chokepoint on purpose
+// (same as every other repo-level test in this file) -- the guard proven
+// here is the second line of defense, not the only one.
+func TestMemberRepository_Create_NonMemberActor_CannotGrantEvenAttendee(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewMemberRepository(pool)
+	ctx := context.Background()
+
+	admin := createTestUser(t, pool)
+	evt := createTestEvent(t, pool, admin)
+
+	nonMember := createTestUser(t, pool)
+	targetEmail := uniqueSubject(t) + "@example.com"
+	createTestUserWithEmail(t, pool, targetEmail)
+
+	_, err := repo.Create(ctx, nonMember, evt.ID, member.CreateInput{Email: targetEmail, Role: "attendee"})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("got err %v, want ErrForbidden (non-member actor, even for role=attendee)", err)
+	}
+
+	if n := countRows(t, pool, `SELECT count(*) FROM event_members WHERE event_id = $1 AND user_id = (SELECT id FROM users WHERE email = $2)`, evt.ID, targetEmail); n != 0 {
+		t.Errorf("event_members rows for the target = %d, want 0 (the fail-open grant must not have inserted anything)", n)
+	}
+}
+
 func TestMemberRepository_List_KeysetPagination(t *testing.T) {
 	pool := testPool(t)
 	repo := postgres.NewMemberRepository(pool)

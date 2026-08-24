@@ -16,11 +16,12 @@ import (
 // not a growing positional parameter list, now that item 08 adds the first
 // business routes alongside /health.
 type RouterDeps struct {
-	Health  *handler.HealthHandler
-	Event   *handler.EventHandler
-	Member  *handler.MemberHandler
-	Room    *handler.RoomHandler
-	Session *handler.SessionHandler
+	Health     *handler.HealthHandler
+	Event      *handler.EventHandler
+	Member     *handler.MemberHandler
+	Room       *handler.RoomHandler
+	Session    *handler.SessionHandler
+	Invitation *handler.InvitationHandler
 
 	AuthVerifier middleware.TokenVerifier
 	Users        middleware.UserResolver
@@ -61,6 +62,13 @@ type RouterDeps struct {
 // shape as rooms -- role_permissions already has session rows for all
 // three roles (item 07 seed, including attendee:session:read), so every
 // route goes through Authz, no Auth-only carve-out.
+//
+// The two /v1/events/{eventId}/invitations routes (item 13) are the same
+// shape as rooms/sessions too -- role_permissions already has
+// invitation:create/read rows for admin and contributor (item 07), no
+// events-style Auth-only carve-out. There is no PATCH/DELETE: invitations
+// has no version column and no accept/decline lifecycle (D1), so create
+// and list are the whole surface.
 func NewRouter(deps RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", deps.Health)
@@ -77,6 +85,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 	}
 	authzForSession := func(action domainauthz.Action) func(http.Handler) http.Handler {
 		return middleware.Authz(deps.Authz, domainauthz.ResourceSession, action, deps.Logger)
+	}
+	authzForInvitation := func(action domainauthz.Action) func(http.Handler) http.Handler {
+		return middleware.Authz(deps.Authz, domainauthz.ResourceInvitation, action, deps.Logger)
 	}
 
 	mux.Handle("POST /v1/events", auth(http.HandlerFunc(deps.Event.CreateEvent)))
@@ -101,6 +112,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 	mux.Handle("GET /v1/events/{eventId}/sessions/{sessionId}", auth(authzForSession(domainauthz.ActionRead)(http.HandlerFunc(deps.Session.GetSession))))
 	mux.Handle("PATCH /v1/events/{eventId}/sessions/{sessionId}", auth(authzForSession(domainauthz.ActionUpdate)(http.HandlerFunc(deps.Session.PatchSession))))
 	mux.Handle("DELETE /v1/events/{eventId}/sessions/{sessionId}", auth(authzForSession(domainauthz.ActionDelete)(http.HandlerFunc(deps.Session.DeleteSession))))
+
+	mux.Handle("POST /v1/events/{eventId}/invitations", auth(authzForInvitation(domainauthz.ActionCreate)(http.HandlerFunc(deps.Invitation.CreateInvitation))))
+	mux.Handle("GET /v1/events/{eventId}/invitations", auth(authzForInvitation(domainauthz.ActionRead)(http.HandlerFunc(deps.Invitation.ListInvitations))))
 
 	return mux
 }
