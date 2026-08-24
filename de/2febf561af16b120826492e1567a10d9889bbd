@@ -1,0 +1,57 @@
+migrations/20260824090000_seed_role_permissions.down.sql
+  s_7443d40aeff28a::t_6372fb1ea4b418 1
+internal/adapter/authz/policy_internal_test.go
+  s_7443d40aeff28a::t_e53c83b4103f90 1-17,21-49
+  s_7443d40aeff28a::t_b5e6d018b1245e 18-20
+internal/http/middleware/authz_test.go
+  s_7443d40aeff28a::t_f224c60069d586 1-108
+  s_7443d40aeff28a::t_58ece8853c3dae 109-131
+internal/adapter/authz/policy.go
+  s_7443d40aeff28a::t_776010eabce847 1-122
+internal/adapter/authz/policy_test.go
+  s_7443d40aeff28a::t_e4fef367941286 5,16-29
+  s_7443d40aeff28a::t_e4613976d8f67b 118-121,123-128
+  s_7443d40aeff28a::t_fc2ed5e47b9aec 1-4,6-15,30-117,122,129-311,313-321
+  s_7443d40aeff28a::t_c72488c753b129 312
+docs/requirements.md
+  s_7443d40aeff28a::t_9849fb607f6aac 212
+FEATURES.md
+  s_7443d40aeff28a::t_9c5738c445e786 24
+internal/http/middleware/auth.go
+  s_7443d40aeff28a::t_85965ac79332f7 40-48
+  s_7443d40aeff28a::t_f306fd1aafcfa1 49-51
+migrations/20260824090000_seed_role_permissions.up.sql
+  s_7443d40aeff28a::t_46f7088a9079e9 1-53
+internal/http/middleware/authz_integration_test.go
+  s_7443d40aeff28a::t_151cdbfc0beeb3 53
+  s_7443d40aeff28a::t_8f381df4a745ea 1-14,16-52,54-210
+  s_7443d40aeff28a::t_c2014e26d038e3 15
+internal/container/container_test.go
+  s_7443d40aeff28a::t_9def5961993ab2 54-56
+AUDIT.md
+  s_7443d40aeff28a::t_570fae23b70567 140-157
+internal/domain/authz/port.go
+  s_7443d40aeff28a::t_242da11f9d93da 1-41
+internal/http/middleware/authz.go
+  s_7443d40aeff28a::t_bccea1c9654100 1-69
+internal/container/container.go
+  s_7443d40aeff28a::t_e34e0db58cf042 60-65,72
+  s_7443d40aeff28a::t_47313006987578 15
+  s_7443d40aeff28a::t_e4a2cf704aca98 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "de2febf561af16b120826492e1567a10d9889bbd",
+  "prompts": {},
+  "sessions": {
+    "s_7443d40aeff28a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9dc94437-1b96-4f09-8d8d-a4be3bf12edf",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
