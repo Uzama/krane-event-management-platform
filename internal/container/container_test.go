@@ -51,6 +51,9 @@ func TestNew_Succeeds(t *testing.T) {
 	if c.Users == nil {
 		t.Error("container.Users is nil -- item 06 must wire the user upsert service at boot")
 	}
+	if c.Authz == nil {
+		t.Error("container.Authz is nil -- item 07 must wire the role_permissions policy at boot")
+	}
 }
 
 // TestNew_FailsFastOnDeadOIDCIssuer mirrors TestNew_FailsFastOnDeadHost for
