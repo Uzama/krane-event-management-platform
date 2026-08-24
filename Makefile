@@ -24,6 +24,7 @@ POSTGRES_TEST_DB   ?= krane_test
 KRANE_APP_USER     ?= krane_app
 KRANE_APP_PASSWORD ?= dev_only_app
 OIDC_PORT          ?= 9090
+OIDC_AUDIENCE      ?= krane-api
 API_PORT           ?= 8080
 
 export
@@ -45,10 +46,11 @@ MIGRATE_URL_TEST := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:54
 # fail there.
 GOLANGCI_LINT_IMAGE := golangci/golangci-lint:v1.62.2-alpine
 
-OIDC_DISCOVERY := http://localhost:$(OIDC_PORT)/default/.well-known/openid-configuration
+OIDC_DISCOVERY   := http://localhost:$(OIDC_PORT)/default/.well-known/openid-configuration
+OIDC_ISSUER_URL  := http://localhost:$(OIDC_PORT)/default
 
 .DEFAULT_GOAL := help
-.PHONY: help up down seed test lint generate contract-check migrate-up migrate-down psql guard-production-credentials wait-oidc
+.PHONY: help up down seed test lint generate contract-check migrate-up migrate-down psql guard-production-credentials wait-oidc token
 
 help: ## Show the available targets
 	@echo "Event Management Platform"
@@ -131,6 +133,18 @@ migrate-down: ## Roll the dev database back one migration
 psql: ## Open a psql shell on the dev database as the migrator
 	docker compose exec -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres \
 		psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)"
+
+# USER names a demo identity for convenience -- it grants no privilege by
+# itself. Roles are per-event and live only in event_members (item 09+); a
+# token never encodes one.
+token: ## Mint a demo JWT via the mock OIDC issuer: make token USER=admin|contributor|attendee
+	@case "$(USER)" in \
+		admin|contributor|attendee) ;; \
+		*) echo "usage: make token USER=admin|contributor|attendee" >&2; exit 1 ;; \
+	esac
+	@curl -sf -X POST "http://localhost:$(OIDC_PORT)/default/token" \
+		-d grant_type=client_credentials -d client_id=demo-$(USER) -d client_secret=unused \
+		| grep -o '"access_token"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]+)"$$/\1/'
 
 # The mock OIDC image ships without a shell, so it cannot carry a compose
 # healthcheck. Poll its discovery document from the host instead.

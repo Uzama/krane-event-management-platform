@@ -6,3 +6,4 @@ Imperative one-liners, each written because something actually went wrong. Loade
 
 - Mount the Postgres volume at `/var/lib/postgresql`, never `/var/lib/postgresql/data` — the `postgres:18+` images keep data in a major-version subdirectory and refuse to start on the old path.
 - Before pinning any dependency, check its own `go` directive against ours; a module requiring a newer Go than `go.mod` declares fails to resolve rather than degrading gracefully.
+- Escape a literal `${...}` in docker-compose.yml as `$${...}` whenever it's meant for the container's own env-var templating, not Compose's — Compose interpolates `${VAR}` in every string value (including multi-line ones) before the container ever sees it, silently defaulting undefined names to blank.

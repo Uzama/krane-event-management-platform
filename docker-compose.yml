@@ -44,10 +44,38 @@ services:
   # them; swapping this for a hosted issuer is one env var (item 06).
   # No healthcheck: the image ships without a shell to run one in, so the
   # Makefile polls the discovery endpoint from the host instead.
+  #
+  # JSON_CONFIG (verified against this exact pinned image, not just its docs)
+  # gives the "default" issuer four claim mappings, matched on a token
+  # request's form parameters:
+  #   - demo-admin / demo-contributor / demo-attendee: fixed identities for
+  #     `make token USER=...`. These carry identity only (sub/email/name/aud)
+  #     -- never a role. Roles live in event_members starting item 09.
+  #   - test_sub/test_aud: test-only plumbing so Go tests can mint a token
+  #     for an arbitrary, unique subject (and deliberately wrong audiences)
+  #     without touching the three fixed demo identities -- keeps parallel
+  #     test packages from colliding on users.subject's unique constraint.
   oidc:
     image: ghcr.io/navikt/mock-oauth2-server:2.1.10
     environment:
       SERVER_PORT: 8080
+      JSON_CONFIG: |
+        {
+          "interactiveLogin": false,
+          "tokenCallbacks": [{
+            "issuerId": "default",
+            "requestMappings": [
+              { "requestParam": "client_id", "match": "demo-admin",
+                "claims": {"sub": "demo-admin", "email": "admin@demo.krane", "name": "Demo Admin", "aud": ["krane-api"]}},
+              { "requestParam": "client_id", "match": "demo-contributor",
+                "claims": {"sub": "demo-contributor", "email": "contributor@demo.krane", "name": "Demo Contributor", "aud": ["krane-api"]}},
+              { "requestParam": "client_id", "match": "demo-attendee",
+                "claims": {"sub": "demo-attendee", "email": "attendee@demo.krane", "name": "Demo Attendee", "aud": ["krane-api"]}},
+              { "requestParam": "test_sub", "match": ".*",
+                "claims": {"sub": "$${test_sub}", "email": "$${test_sub}@test.krane", "name": "Test User", "aud": ["$${test_aud}"]}}
+            ]
+          }]
+        }
     ports:
       - "${OIDC_PORT:-9090}:8080"
 
@@ -101,6 +129,8 @@ services:
       HTTP_PORT: "8080"
       DATABASE_URL: postgres://${KRANE_APP_USER:-krane_app}:${KRANE_APP_PASSWORD:-dev_only_app}@postgres:5432/${POSTGRES_DB:-krane}?sslmode=disable
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      OIDC_ISSUER_URL: http://oidc:8080/default
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-krane-api}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
