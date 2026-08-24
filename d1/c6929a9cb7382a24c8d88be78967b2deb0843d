@@ -1,0 +1,47 @@
+cmd/agent/tools.go
+  s_6e4426a7f036da::t_1a661347645f4b 1-156
+cmd/agent/agent_test.go
+  s_6e4426a7f036da::t_4507568050f3d4 1-153
+cmd/agent/client.go
+  s_6e4426a7f036da::t_0ceb88c36da3d1 1-137,139-162
+  s_6e4426a7f036da::t_df37ed146ea5f7 138
+cmd/agent/testhelpers_test.go
+  s_6e4426a7f036da::t_f7ef7b449da221 1-10
+FEATURES.md
+  s_6e4426a7f036da::t_6ec41a45ee90d6 32
+cmd/agent/main.go
+  s_6e4426a7f036da::t_e9501e6b8edd1a 1-85
+cmd/agent/scenarios.go
+  s_6e4426a7f036da::t_17274cf270ae8d 23-25
+  s_6e4426a7f036da::t_66a887f629f89a 1-22,26-40
+cmd/agent/anthropic.go
+  s_6e4426a7f036da::t_08c8df69c8c704 1-105,107-175
+  s_6e4426a7f036da::t_9b996318de7f4f 106
+cmd/agent/client_test.go
+  s_6e4426a7f036da::t_5e459a5115a3ef 306
+  s_6e4426a7f036da::t_2bc80e8b8c8368 6
+  s_6e4426a7f036da::t_9b1b713b5dc040 1-5,7-157,159-185,187-221,223-305,307-312
+  s_6e4426a7f036da::t_84346eaf470ad8 158,186,222
+AUDIT.md
+  s_6e4426a7f036da::t_8e154f2543794b 265-278
+cmd/agent/agent.go
+  s_6e4426a7f036da::t_1349f03162e456 1-129
+cmd/agent/tools_test.go
+  s_6e4426a7f036da::t_38988a053a2513 1-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "d1c6929a9cb7382a24c8d88be78967b2deb0843d",
+  "prompts": {},
+  "sessions": {
+    "s_6e4426a7f036da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5729ef45-db0d-4c0d-b36b-722e58656ee5",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
