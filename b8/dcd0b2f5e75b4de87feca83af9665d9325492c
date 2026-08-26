@@ -1,0 +1,33 @@
+event_platform_er_diagram_v2.html
+  s_93bf69d7d4e096::t_2da991c144eec5 8,27-34,133-134,146-148,156,158-257,260,263-280
+  s_93bf69d7d4e096::t_7780de82ebf09a 258-259,261-262
+  s_93bf69d7d4e096::t_d03b717fc32e93 52-53,60-62,75-76,88-90,98-99,110,119-120,135-145,149-155,157
+docs/er-diagram.md
+  s_93bf69d7d4e096::t_b03a305bd51a1a 38
+  s_93bf69d7d4e096::t_a601b3e83f11f0 137-142
+  s_93bf69d7d4e096::t_302694aeb6a4a0 3,5
+  s_93bf69d7d4e096::t_0c2cefbf53f0a8 105-126
+  s_93bf69d7d4e096::t_6f63a27d3c680f 69
+  s_93bf69d7d4e096::t_385a34d89948a4 174,178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b8dcd0b2f5e75b4de87feca83af9665d9325492c",
+  "prompts": {},
+  "humans": {
+    "h_9e2a12161bab30": {
+      "author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  },
+  "sessions": {
+    "s_93bf69d7d4e096": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c860bd-84bf-4d3a-81e3-13886cc70c90",
+        "model": "unknown"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
