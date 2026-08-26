@@ -259,3 +259,102 @@ func TestGenerateDataset_SameSeedProducesIdenticalContent(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaultConfig_MatchesAssignmentScale pins the assignment's literal
+// numbers -- "50 events, 5k users, 50k invitations" -- to DefaultConfig.
+// TestGenerateDataset_ExactCounts above compares the dataset to cfg, which
+// proves generation honours the config but not that the config is the
+// assignment's; lowering a default would have passed it. This one is red
+// the moment any of the three drifts.
+func TestDefaultConfig_MatchesAssignmentScale(t *testing.T) {
+	const wantEvents, wantUsers, wantInvitations = 50, 5000, 50000
+
+	cfg := DefaultConfig()
+	if got := cfg.BulkEventCount + 4; got != wantEvents { // 2 DST fixtures + 1 large fixture + 1 demo event
+		t.Errorf("DefaultConfig yields %d events, want %d (assignment: 50 events)", got, wantEvents)
+	}
+	if cfg.UserCount != wantUsers {
+		t.Errorf("DefaultConfig.UserCount = %d, want %d (assignment: 5k users)", cfg.UserCount, wantUsers)
+	}
+	if got := wantEvents * cfg.InvitationsPerEvent; got != wantInvitations {
+		t.Errorf("DefaultConfig yields %d invitations, want %d (assignment: 50k invitations)", got, wantInvitations)
+	}
+
+	ds := GenerateDataset(cfg, DefaultSeed)
+	if len(ds.Events) != wantEvents || len(ds.Users) != wantUsers || len(ds.Invitations) != wantInvitations {
+		t.Errorf("generated %d events / %d users / %d invitations, want %d / %d / %d",
+			len(ds.Events), len(ds.Users), len(ds.Invitations), wantEvents, wantUsers, wantInvitations)
+	}
+}
+
+// TestGenerateDataset_EventsSpanMultipleTimezonesIncludingDST pins the
+// assignment's "events span time zones and DST boundaries; seed data must
+// include both". TestGenerateDataset_DSTSessions_CorrectDurations proves the
+// DST half; nothing asserted the multi-zone half until feature 29 -- a
+// bulkTimezones list collapsed to a single zone would have passed.
+func TestGenerateDataset_EventsSpanMultipleTimezonesIncludingDST(t *testing.T) {
+	ds := GenerateDataset(DefaultConfig(), DefaultSeed)
+
+	// Zone spread is measured over the 46 bulk events only. The four
+	// special-cased fixtures pin their own zones (New York x2, Colombo x2)
+	// and would satisfy a whole-dataset count on their own -- feature 29's
+	// first draft of this test stayed green with bulkTimezones collapsed to
+	// {"UTC"} for exactly that reason.
+	special := map[string]bool{
+		seedDSTSpringForwardEventName: true, seedDSTFallBackEventName: true,
+		seedLargeEventName: true, seedDemoEventName: true,
+	}
+	zones := map[string]int{}
+	bulk := 0
+	for _, e := range ds.Events {
+		if _, err := time.LoadLocation(e.Timezone); err != nil {
+			t.Errorf("event %q has timezone %q which is not a loadable IANA name: %v", e.Name, e.Timezone, err)
+		}
+		if special[e.Name] {
+			continue
+		}
+		bulk++
+		zones[e.Timezone]++
+	}
+	if bulk == 0 {
+		t.Fatal("no bulk (non-fixture) events generated")
+	}
+	if len(zones) < 3 {
+		t.Errorf("the %d bulk events use only %d distinct timezone(s) %v, want at least 3 so the seed actually spans zones", bulk, len(zones), zones)
+	}
+
+	// Both DST fixture events must be there, in a zone that observes DST.
+	for _, name := range []string{seedDSTSpringForwardEventName, seedDSTFallBackEventName} {
+		found := false
+		for _, e := range ds.Events {
+			if e.Name != name {
+				continue
+			}
+			found = true
+			if e.Timezone != "America/New_York" {
+				t.Errorf("DST fixture %q is in %q, want America/New_York", name, e.Timezone)
+			}
+		}
+		if !found {
+			t.Errorf("DST fixture event %q missing from the generated dataset", name)
+		}
+	}
+
+	// And at least one bulk zone that does NOT observe DST, so the seed
+	// exercises the fixed-offset path too, not only DST zones.
+	hasFixedOffset := false
+	for zone := range zones {
+		loc, err := time.LoadLocation(zone)
+		if err != nil {
+			continue
+		}
+		_, jan := time.Date(2026, time.January, 15, 12, 0, 0, 0, loc).Zone()
+		_, jul := time.Date(2026, time.July, 15, 12, 0, 0, 0, loc).Zone()
+		if jan == jul && zone != "UTC" {
+			hasFixedOffset = true
+		}
+	}
+	if !hasFixedOffset {
+		t.Errorf("no bulk event is in a non-UTC zone without DST (e.g. Asia/Colombo); bulk zones: %v", zones)
+	}
+}

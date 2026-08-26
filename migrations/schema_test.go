@@ -24,9 +24,12 @@ import (
 // silently picked up a wrong default would be worse than one that repeats it.
 const defaultTestDatabaseURL = "postgres://krane_app:dev_only_app@localhost:5432/krane_test?sslmode=disable"
 
-// The nine tables of docs/requirements.md section 2. Listed literally: the point
-// is to catch a migration that half-applied, so deriving this from the migration
-// file would defeat the check.
+// The eleven tables of docs/er-diagram.md: the nine from the init migration
+// plus item 23's session_series / session_exceptions. Listed literally: the
+// point is to catch a migration that half-applied, so deriving this from the
+// migration files would defeat the check. (Feature 29 found this list stuck
+// at nine for two migrations -- a half-applied recurring-sessions migration
+// would have passed.)
 var schemaTables = []string{
 	"users",
 	"events",
@@ -37,6 +40,8 @@ var schemaTables = []string{
 	"invitations",
 	"audit_log",
 	"idempotency_keys",
+	"session_series",
+	"session_exceptions",
 }
 
 // runtimeRole is the no-DDL identity the API connects as. krane_migrator owns
@@ -158,6 +163,13 @@ func TestPrivilegeMatrixApplied(t *testing.T) {
 		{"events", "SELECT", true, "ordinary data table: full DML"},
 		{"events", "UPDATE", true, "ordinary data table: full DML"},
 		{"events", "DELETE", true, "ordinary data table: full DML"},
+		// Item 23's tables were created by a later migration, so they get their
+		// privileges from the init migration's ALTER DEFAULT PRIVILEGES, not an
+		// explicit GRANT -- these rows prove that default actually applied.
+		{"session_series", "SELECT", true, "item 23: the API reads series rules"},
+		{"session_series", "INSERT", true, "item 23: the API creates series rules"},
+		{"session_exceptions", "SELECT", true, "item 23: the API reads schedule history"},
+		{"session_exceptions", "INSERT", true, "item 23: the API records occurrence edits and cancellations"},
 	}
 
 	for _, tc := range cases {

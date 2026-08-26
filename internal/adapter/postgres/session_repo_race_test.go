@@ -82,3 +82,72 @@ func TestSessionRepository_Create_ConcurrentOverlappingRoomBookings_ExactlyOneSu
 		t.Fatalf("got %d successes and %d conflicts, want exactly 1 and 1 (results: %v)", successes, conflicts, results)
 	}
 }
+
+// TestSessionRepository_Create_ConcurrentOverlappingSpeakerBookings_ExactlyOneSucceeds
+// is the speaker half of the assignment's "a room or speaker can't be
+// double-booked" -- the room race above proves sessions_room_no_overlap_excl;
+// this one proves sessions_speaker_no_overlap_excl with the same barrier.
+// Two DIFFERENT rooms, one speaker, overlapping by 30 minutes: only the
+// speaker EXCLUDE can reject the second insert, so a pass here cannot be
+// borrowed from the room constraint. Falsified during feature 29 by dropping
+// the speaker constraint in krane_test (2 successes / 0 conflicts).
+func TestSessionRepository_Create_ConcurrentOverlappingSpeakerBookings_ExactlyOneSucceeds(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewSessionRepository(pool)
+	ctx := context.Background()
+
+	creator := createTestUser(t, pool)
+	speaker := createTestUser(t, pool)
+	ev := createTestEvent(t, pool, creator)
+	rooms := postgres.NewRoomRepository(pool)
+	rmA, err := rooms.Create(ctx, creator, ev.ID, validRoomInput("Hall A "+uniqueSubject(t)))
+	if err != nil {
+		t.Fatalf("creating room A: %v", err)
+	}
+	rmB, err := rooms.Create(ctx, creator, ev.ID, validRoomInput("Hall B "+uniqueSubject(t)))
+	if err != nil {
+		t.Fatalf("creating room B: %v", err)
+	}
+
+	starts := time.Now().UTC().Truncate(time.Millisecond)
+	inputs := []session.CreateInput{
+		{RoomID: rmA.ID, SpeakerID: speaker, Title: "Talk in A", StartsAt: starts, EndsAt: starts.Add(time.Hour)},
+		{RoomID: rmB.ID, SpeakerID: speaker, Title: "Talk in B", StartsAt: starts.Add(30 * time.Minute), EndsAt: starts.Add(90 * time.Minute)},
+	}
+
+	var ready, start sync.WaitGroup
+	ready.Add(2)
+	start.Add(1)
+
+	results := make([]error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for i := range inputs {
+		go func(i int) {
+			defer wg.Done()
+			ready.Done()
+			start.Wait()
+			_, err := repo.Create(ctx, creator, ev.ID, inputs[i])
+			results[i] = err
+		}(i)
+	}
+	ready.Wait()
+	start.Done()
+	wg.Wait()
+
+	successes, conflicts := 0, 0
+	for _, err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, domain.ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("got %d successes and %d conflicts, want exactly 1 and 1 (results: %v)", successes, conflicts, results)
+	}
+}

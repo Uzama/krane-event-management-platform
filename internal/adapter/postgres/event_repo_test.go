@@ -433,3 +433,71 @@ func TestEventRepository_Delete_StaleVersionReturnsVersionMismatch(t *testing.T)
 		t.Fatalf("Get after failed delete: got err %v, want the event to still exist", err)
 	}
 }
+
+// TestEventRepository_Update_DescriptionThreeStates is events' copy of the
+// assignment's "clearing a field and leaving it untouched are different
+// requests" proof at the persistence layer -- sessions and rooms already had
+// theirs (session_repo_test.go / room_repo_test.go); events' nullable
+// description was proven only at request validation until feature 29.
+// Absent -> untouched, explicit null -> NULL, value -> stored; the version
+// column advances on every write regardless of which fields it carried.
+func TestEventRepository_Update_DescriptionThreeStates(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewEventRepository(pool)
+	ctx := context.Background()
+
+	creator := createTestUser(t, pool)
+	in := validCreateInput("Description states " + uniqueSubject(t))
+	original := "Original description"
+	in.Description = &original
+	created, err := repo.Create(ctx, creator, in)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.Description == nil || *created.Description != original {
+		t.Fatalf("fixture: got Description %v, want %q", created.Description, original)
+	}
+
+	// (1) Absent -- description untouched, other field changed.
+	untouched, err := repo.Update(ctx, creator, created.ID, created.Version, event.Patch{Name: opt.Of("Renamed once " + uniqueSubject(t))})
+	if err != nil {
+		t.Fatalf("Update (absent description): %v", err)
+	}
+	if untouched.Description == nil || *untouched.Description != original {
+		t.Fatalf("got Description %v after an update that didn't set it, want unchanged %q", untouched.Description, original)
+	}
+	if untouched.Version != created.Version+1 {
+		t.Fatalf("got Version %d after first update, want %d", untouched.Version, created.Version+1)
+	}
+
+	// (2) Explicit null -- description cleared.
+	cleared, err := repo.Update(ctx, creator, created.ID, untouched.Version, event.Patch{Description: opt.Of[*string](nil)})
+	if err != nil {
+		t.Fatalf("Update (null description): %v", err)
+	}
+	if cleared.Description != nil {
+		t.Fatalf("got Description %q after an explicit null, want nil", *cleared.Description)
+	}
+	if cleared.Version != untouched.Version+1 {
+		t.Fatalf("got Version %d after clearing, want %d", cleared.Version, untouched.Version+1)
+	}
+
+	// (3) Explicit value -- description set.
+	newDesc := "New description"
+	set, err := repo.Update(ctx, creator, created.ID, cleared.Version, event.Patch{Description: opt.Of(&newDesc)})
+	if err != nil {
+		t.Fatalf("Update (set description): %v", err)
+	}
+	if set.Description == nil || *set.Description != newDesc {
+		t.Fatalf("got Description %v after setting %q, want %q", set.Description, newDesc, newDesc)
+	}
+
+	// The re-read agrees with what Update returned -- RETURNING is not lying.
+	got, err := repo.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Description == nil || *got.Description != newDesc || got.Version != set.Version {
+		t.Fatalf("re-read got Description %v / Version %d, want %q / %d", got.Description, got.Version, newDesc, set.Version)
+	}
+}
