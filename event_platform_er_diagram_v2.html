@@ -1,0 +1,305 @@
+<style>
+#erd svg.erDiagram .divider path { stroke-opacity: 0.5; }
+#erd svg.erDiagram .row-rect-odd path,
+#erd svg.erDiagram .row-rect-odd rect,
+#erd svg.erDiagram .row-rect-even path,
+#erd svg.erDiagram .row-rect-even rect { stroke: none !important; }
+</style>
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Entity-relationship diagram for the event management platform, version 2, showing eleven tables: users, events, event_members, role_permissions, rooms, sessions, invitations, audit_log, idempotency_keys, session_series, and session_exceptions, and how they relate.</h2>
+<div id="erd"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const themeMode = document.documentElement.dataset.mode;
+const dark = themeMode ? themeMode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"anthropic-sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"anthropic-sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+});
+
+// Version 2. The nine v1 tables keep v1's arrangement: they are laid out by
+// Mermaid from exactly v1's graph (same entities, same ten relationships,
+// only the missing columns added). The two item-23 tables are rendered
+// separately, placed in the empty space to the right of `sessions`, and
+// wired up with hand-routed lines that reuse Mermaid's own crow's-foot
+// markers -- feeding them into the auto-layout would reshuffle everything.
+const v1Graph = `erDiagram
+    users {
+        uuid id PK
+        text subject UK
+        citext email UK
+        text name
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    events {
+        uuid id PK
+        text name
+        text description
+        text timezone
+        timestamptz starts_at
+        timestamptz ends_at
+        integer version
+        timestamptz deleted_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    event_members {
+        uuid id PK
+        uuid event_id FK
+        uuid user_id FK
+        text role
+        timestamptz created_at
+        timestamptz updated_at
+        integer version
+    }
+    role_permissions {
+        text role PK
+        text resource PK
+        text action PK
+    }
+    rooms {
+        uuid id PK
+        uuid event_id FK
+        text name
+        integer capacity
+        integer version
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    sessions {
+        uuid id PK
+        uuid event_id FK
+        uuid room_id FK
+        uuid speaker_id FK
+        text title
+        text description
+        tstzrange time_range
+        integer version
+        timestamptz deleted_at
+        timestamptz created_at
+        timestamptz updated_at
+        uuid series_id FK
+    }
+    invitations {
+        uuid id PK
+        uuid event_id FK
+        uuid user_id FK
+        citext email
+        text role
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    audit_log {
+        uuid id PK
+        uuid actor_id FK
+        text entity_type
+        uuid entity_id
+        text action
+        jsonb before
+        jsonb after
+        text request_id
+        timestamptz created_at
+    }
+    idempotency_keys {
+        uuid id PK
+        uuid actor_id FK
+        text key
+        text endpoint
+        text request_hash
+        integer response_status
+        jsonb response_body
+        timestamptz created_at
+    }
+
+    events           ||--o{ event_members    : "has roster"
+    users            ||--o{ event_members    : "holds role"
+    events           ||--o{ rooms            : "owns"
+    events           ||--o{ sessions         : "schedules"
+    rooms            ||--o{ sessions         : "hosts"
+    users            ||--o{ sessions         : "speaks at"
+    events           ||--o{ invitations      : "invites to"
+    users            |o--o{ invitations      : "may be invitee"
+    users            ||--o{ audit_log        : "acted"
+    users            ||--o{ idempotency_keys : "retried"`;
+
+const seriesGraph = `erDiagram
+    session_series {
+        uuid id PK
+        uuid event_id FK
+        uuid room_id FK
+        uuid speaker_id FK
+        text title
+        text description
+        text freq
+        integer interval_count
+        integer occurrences
+        timestamptz created_at
+    }`;
+
+const exceptionsGraph = `erDiagram
+    session_exceptions {
+        uuid id PK
+        uuid series_id FK
+        uuid session_id FK
+        text status
+        timestamptz original_starts_at
+        timestamptz created_at
+    }`;
+
+const { svg } = await mermaid.render('erd-svg', v1Graph);
+const host = document.getElementById('erd');
+host.innerHTML = svg;
+const root = host.querySelector('svg');
+const nodesG = root.querySelector('g.nodes');
+const edgesG = root.querySelector('g.edgePaths');
+const labelsG = root.querySelector('g.edgeLabels');
+
+// Render a single-entity diagram and move its node into the main SVG.
+async function transplant(id, graph) {
+  const { svg: s } = await mermaid.render(id, graph);
+  const doc = new DOMParser().parseFromString(s, 'image/svg+xml');
+  const node = document.importNode(doc.querySelector('g.node'), true);
+  node.id = `erd-svg-entity-${id}`;
+  nodesG.appendChild(node);
+  return node;
+}
+
+// Node geometry in root-SVG coordinates. Mermaid draws each entity centred
+// on its own origin and positions it with a translate().
+function box(node) {
+  const b = node.getBBox();
+  const m = node.transform.baseVal.consolidate()?.matrix ?? { e: 0, f: 0 };
+  return { left: m.e + b.x, top: m.f + b.y, right: m.e + b.x + b.width, bottom: m.f + b.y + b.height, w: b.width, h: b.height, cx: m.e, cy: m.f };
+}
+function placeTopLeft(node, left, top) {
+  const b = node.getBBox();
+  node.setAttribute('transform', `translate(${left - b.x}, ${top - b.y})`);
+}
+const byName = {};
+for (const n of nodesG.querySelectorAll('g.node')) {
+  byName[n.id.replace(/^erd-svg-entity-/, '').replace(/-\d+$/, '')] = n;
+}
+
+const series = await transplant('session_series', seriesGraph);
+const exceptions = await transplant('session_exceptions', exceptionsGraph);
+
+const sessions = box(byName.sessions);
+const users = box(byName.users);
+const events = box(byName.events);
+const rooms = box(byName.rooms);
+
+// Bottom row, right of sessions: session_series under users, exceptions to its right.
+const GAP = 140;
+placeTopLeft(series, Math.max(sessions.right + GAP, users.left), sessions.top);
+const seriesBox = box(series);
+placeTopLeft(exceptions, seriesBox.right + GAP, sessions.top);
+const exceptionsBox = box(exceptions);
+
+// A relationship line in Mermaid's own markup: path + crow's-foot markers + label.
+const MARK = { one: 'onlyOne', zeroOne: 'zeroOrOne', many: 'zeroOrMore' };
+const labelTemplate = labelsG.querySelector('g.edgeLabel');
+function relate(from, to, points, label, labelAt) {
+  const d = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join('');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('class', 'edge-thickness-normal edge-pattern-solid relationshipLine');
+  p.setAttribute('d', d);
+  p.setAttribute('marker-start', `url(#erd-svg_er-${MARK[from]}Start)`);
+  p.setAttribute('marker-end', `url(#erd-svg_er-${MARK[to]}End)`);
+  edgesG.appendChild(p);
+
+  const g = labelTemplate.cloneNode(true);
+  g.removeAttribute('id');
+  const textHolder = [...g.querySelectorAll('*')].filter(el => el.children.length === 0 && el.textContent.trim()).pop();
+  textHolder.textContent = label;
+  g.setAttribute('transform', `translate(${labelAt[0]}, ${labelAt[1]})`);
+  labelsG.appendChild(g);
+  // Re-centre the cloned label on its new text width.
+  const fo = g.querySelector('foreignObject');
+  const inner = g.querySelector('.label') ?? fo?.parentElement;
+  if (fo && inner) {
+    const div = fo.firstElementChild;
+    const w = div.scrollWidth, h = div.scrollHeight;
+    fo.setAttribute('width', w); fo.setAttribute('height', h);
+    inner.setAttribute('transform', `translate(${-w / 2}, ${-h / 2})`);
+  }
+}
+
+// Corridors: one above the bottom row for lines coming down from events/users,
+// two below it for lines that have to pass under sessions.
+const bottom = Math.max(sessions.bottom, seriesBox.bottom, exceptionsBox.bottom);
+const above = sessions.top - 45;
+const under1 = bottom + 40;
+const under2 = bottom + 80;
+
+// session_series |o--o{ sessions : materializes  (straight, series -> sessions)
+{
+  const y = sessions.top + 70;
+  relate('zeroOne', 'many', [[seriesBox.left, y], [sessions.right, y]], 'materializes', [(seriesBox.left + sessions.right) / 2, y - 14]);
+}
+// session_series ||--o{ session_exceptions : records  (straight)
+{
+  const y = sessions.top + 70;
+  relate('one', 'many', [[seriesBox.right, y], [exceptionsBox.left, y]], 'records', [(seriesBox.right + exceptionsBox.left) / 2, y - 14]);
+}
+// users ||--o{ session_series : speaks at  (straight down)
+{
+  const x = seriesBox.left + 60;
+  relate('one', 'many', [[x, users.bottom], [x, seriesBox.top]], 'speaks at', [x + 40, (users.bottom + seriesBox.top) / 2]);
+}
+// events ||--o{ session_series : owns  (out of events' right side, down the gap
+// between event_members and invitations, across the corridor, down into series)
+{
+  const y0 = events.bottom - 30, x0 = events.right + 40, x1 = seriesBox.left + 130;
+  relate('one', 'many', [[events.right, y0], [x0, y0], [x0, above], [x1, above], [x1, seriesBox.top]], 'owns', [(x0 + x1) / 2, above - 14]);
+}
+// rooms ||--o{ session_series : hosts  (down, under sessions, up into series)
+{
+  const x0 = rooms.right - 30, x1 = seriesBox.left + 60;
+  relate('one', 'many', [[x0, rooms.bottom], [x0, under1], [x1, under1], [x1, seriesBox.bottom]], 'hosts', [(sessions.left + sessions.right) / 2 - 60, under1 + 16]);
+}
+// sessions ||--o{ session_exceptions : deviated  (down, under series, up into exceptions)
+{
+  const x0 = sessions.right - 40, x1 = exceptionsBox.left + 60;
+  relate('one', 'many', [[x0, sessions.bottom], [x0, under2], [x1, under2], [x1, exceptionsBox.bottom]], 'deviated', [(seriesBox.left + seriesBox.right) / 2, under2 + 16]);
+}
+
+// Grow the canvas to fit the new row and corridors.
+const vb = root.getAttribute('viewBox').split(' ').map(Number);
+const width = Math.max(vb[2], exceptionsBox.right + 20);
+const height = under2 + 60;
+root.setAttribute('viewBox', `0 0 ${width} ${height}`);
+root.style.maxWidth = `${width}px`;
+
+document.querySelectorAll('#erd svg.erDiagram .node').forEach(node => {
+  const firstPath = node.querySelector('path[d]');
+  if (!firstPath) return;
+  const d = firstPath.getAttribute('d');
+  const nums = d.match(/-?[\d.]+/g)?.map(Number);
+  if (!nums || nums.length < 8) return;
+  const xs = [nums[0], nums[2], nums[4], nums[6]];
+  const ys = [nums[1], nums[3], nums[5], nums[7]];
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h);
+  rect.setAttribute('rx', '8');
+  for (const a of ['fill', 'stroke', 'stroke-width', 'class', 'style']) {
+    if (firstPath.hasAttribute(a)) rect.setAttribute(a, firstPath.getAttribute(a));
+  }
+  firstPath.replaceWith(rect);
+});
+
+document.querySelectorAll('#erd svg.erDiagram .row-rect-odd path, #erd svg.erDiagram .row-rect-even path').forEach(p => {
+  p.setAttribute('stroke', 'none');
+});
+</script>

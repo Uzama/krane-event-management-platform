@@ -1,8 +1,8 @@
 # ER diagram — data model
 
-Feature 01 deliverable; the data-model half of the required design diagram. Attribute rationale lives in [`requirements.md`](./requirements.md) §2. Refreshed by item 27 to match what shipped.
+Feature 01 deliverable; the data-model half of the required design diagram. Attribute rationale lives in [`requirements.md`](./requirements.md) §2. Refreshed by item 27 to match what shipped, and again after item 23 shipped `session_series`/`session_exceptions`.
 
-Nine tables. Columns whose owning feature is later than item 02 are drawn now and tagged with that item, so item 27's refresh is a text edit rather than a redraw.
+Eleven tables. Columns whose owning feature is later than item 02 are drawn now and tagged with that item, so item 27's refresh is a text edit rather than a redraw.
 
 ```mermaid
 erDiagram
@@ -35,6 +35,7 @@ erDiagram
         text        role         "admin | contributor | attendee"
         timestamptz created_at
         timestamptz updated_at
+        integer     version      "item 09"
     }
 
     role_permissions {
@@ -65,6 +66,7 @@ erDiagram
         timestamptz deleted_at   "nullable, soft delete"
         timestamptz created_at
         timestamptz updated_at
+        uuid        series_id    FK "nullable - item 23, set once at materialization"
     }
 
     invitations {
@@ -100,6 +102,28 @@ erDiagram
         timestamptz created_at
     }
 
+    session_series {
+        uuid        id             PK "uuidv7() - item 23"
+        uuid        event_id       FK
+        uuid        room_id        FK
+        uuid        speaker_id     FK "to users, any user"
+        text        title
+        text        description    "nullable"
+        text        freq           "daily | weekly"
+        integer     interval_count "> 0"
+        integer     occurrences    "1..52"
+        timestamptz created_at
+    }
+
+    session_exceptions {
+        uuid        id                 PK "uuidv7() - item 23"
+        uuid        series_id          FK
+        uuid        session_id         FK
+        text        status             "modified | cancelled"
+        timestamptz original_starts_at "starts_at as materialized, before the edit/cancel"
+        timestamptz created_at
+    }
+
     events           ||--o{ event_members    : "has roster"
     users            ||--o{ event_members    : "holds per-event role"
     events           ||--o{ rooms            : "owns"
@@ -110,6 +134,12 @@ erDiagram
     users            |o--o{ invitations      : "may be invitee"
     users            ||--o{ audit_log        : "acted"
     users            ||--o{ idempotency_keys : "retried"
+    events           ||--o{ session_series     : "owns"
+    rooms            ||--o{ session_series     : "hosts"
+    users            ||--o{ session_series     : "speaks at"
+    session_series   |o--o{ sessions           : "materializes"
+    session_series   ||--o{ session_exceptions : "records"
+    sessions         ||--o{ session_exceptions : "deviated"
 ```
 
 `role_permissions` stands alone: it is keyed by the `role` *string*, not by a FK to `event_members`. That is deliberate — the chokepoint loads the whole table once and answers `can(user, action, resource)` from memory, and adding a role stays an INSERT.
@@ -141,8 +171,9 @@ Both `EXCLUDE` constraints are **partial** (`WHERE deleted_at IS NULL`) so a sof
 - **`deleted_at`** — soft delete on `events` and `sessions` only. Membership, rooms and invitations are removed outright. Because item 16's `EXCLUDE` constraints are partial on this column, soft-deleting a session **releases its room and speaker slot immediately** — an intended product rule (D9, [`requirements.md`](./requirements.md) §7.3), not a side effect.
 - **`audit_log.entity_id` has no FK** on purpose: the log must outlive whatever it describes.
 - **Grants:** the application role holds `INSERT, SELECT` on `audit_log` and nothing else. Append-only is enforced by the grant, not by discipline.
+- **`session_series` / `session_exceptions`** (item 23) are history and attribution only, never a scheduling input. A series is eagerly materialized into ordinary `sessions` rows at creation, so every occurrence inherits the `EXCLUDE`, `version`, and audit rules above unchanged; `sessions.series_id` is set once at materialization and `session_exceptions` only records *that* an occurrence was edited or cancelled through the normal session paths. See [ADR 0003](./adr/0003-recurring-sessions-eager-materialization.md).
 
 ## Deferred
 
-- **Recurring sessions** (item 23) will add a rules-plus-exceptions pair of tables and a schedule history. Nothing above anticipates it — deliberately, since the shape depends on how far that item gets scoped.
+- **Recurring sessions** shipped in item 23 in the cut-down shape above (`session_series` + `session_exceptions`, eager materialization). What was cut from the fuller rules-plus-exceptions design is listed in [`TRADEOFFS.md`](../TRADEOFFS.md) and [ADR 0003](./adr/0003-recurring-sessions-eager-materialization.md).
 - **Shared physical rooms across events** are out of scope. `rooms` hangs off `events`, so two events in the same building are two rows and a clash between them is not detected. Deliberate — it keeps the `EXCLUDE` constraint covering exactly what the model claims. See [`requirements.md`](./requirements.md) §7.1.
