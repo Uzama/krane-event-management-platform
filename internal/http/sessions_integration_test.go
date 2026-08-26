@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -741,5 +744,139 @@ func TestSessionsIntegration_CreateSeries_MaterializesOccurrences(t *testing.T) 
 		if getResp.status != http.StatusOK {
 			t.Fatalf("occurrence %d: GET got status %d, want 200: %s", i, getResp.status, getResp.body)
 		}
+	}
+}
+
+// TestSessionsIntegration_ConcurrentConflictingSessions_ExactlyOne201AndOne409
+// is the assignment's sentence proved at the wire, not the repository:
+// "Two conflicting sessions submitted at the same instant must not both
+// succeed." Two goroutines are released on a barrier and POST through the
+// real router, auth, authz and Postgres; exactly one must get 201 and the
+// other 409 with the `session_conflict` envelope. One subtest per EXCLUDE
+// dimension so neither constraint can carry the other. Requests are issued
+// raw inside the goroutines (doEventsITRequest calls t.Fatalf, which is
+// not goroutine-safe) and asserted on the test goroutine. Falsified during
+// feature 29 by dropping each constraint in krane_test (two 201s).
+func TestSessionsIntegration_ConcurrentConflictingSessions_ExactlyOne201AndOne409(t *testing.T) {
+	srv, pool := newSessionsServer(t)
+	spec := loadEventsITSpec(t)
+
+	type wire struct {
+		status int
+		header http.Header
+		body   []byte
+		err    error
+	}
+	post := func(path, token, body string) wire {
+		req, err := http.NewRequest(http.MethodPost, srv.URL+path, strings.NewReader(body))
+		if err != nil {
+			return wire{err: err}
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return wire{err: err}
+		}
+		data, err := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); err == nil {
+			err = closeErr
+		}
+		return wire{status: resp.StatusCode, header: resp.Header, body: data, err: err}
+	}
+
+	cases := []struct {
+		name string
+		// build returns the two conflicting request bodies for one dimension.
+		build func(t *testing.T, eventID, adminToken string) [2]string
+	}{
+		{
+			name: "room",
+			build: func(t *testing.T, eventID, adminToken string) [2]string {
+				roomID := createSessionsITRoom(t, srv, eventID, adminToken)
+				speakerA := createSessionsITSpeaker(t, pool)
+				speakerB := createSessionsITSpeaker(t, pool)
+				return [2]string{
+					sessionCreateBody(roomID, speakerA, "Talk A", "2026-06-15T09:00:00", "2026-06-15T10:00:00"),
+					sessionCreateBody(roomID, speakerB, "Talk B", "2026-06-15T09:30:00", "2026-06-15T10:30:00"),
+				}
+			},
+		},
+		{
+			name: "speaker",
+			build: func(t *testing.T, eventID, adminToken string) [2]string {
+				roomA := createSessionsITRoom(t, srv, eventID, adminToken)
+				resp := doEventsITRequest(t, srv, eventsITRequest{method: http.MethodPost, path: "/v1/events/" + eventID + "/rooms", bearer: adminToken, body: `{"name":"Hall B"}`})
+				if resp.status != http.StatusCreated {
+					t.Fatalf("creating second room: got status %d: %s", resp.status, resp.body)
+				}
+				var roomB struct {
+					ID string `json:"id"`
+				}
+				if err := json.Unmarshal(resp.body, &roomB); err != nil {
+					t.Fatalf("decoding second room: %v", err)
+				}
+				speaker := createSessionsITSpeaker(t, pool)
+				return [2]string{
+					sessionCreateBody(roomA, speaker, "Talk in A", "2026-06-15T09:00:00", "2026-06-15T10:00:00"),
+					sessionCreateBody(roomB.ID, speaker, "Talk in B", "2026-06-15T09:30:00", "2026-06-15T10:30:00"),
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			eventID, adminToken := createSessionsITEvent(t, srv, "Asia/Colombo")
+			sessionsPath := "/v1/events/" + eventID + "/sessions"
+			bodies := tc.build(t, eventID, adminToken)
+
+			var ready, start, done sync.WaitGroup
+			ready.Add(2)
+			start.Add(1)
+			done.Add(2)
+			var results [2]wire
+			for i := range bodies {
+				go func(i int) {
+					defer done.Done()
+					ready.Done()
+					start.Wait()
+					results[i] = post(sessionsPath, adminToken, bodies[i])
+				}(i)
+			}
+			ready.Wait()
+			start.Done()
+			done.Wait()
+
+			created, conflicted := 0, 0
+			for i, r := range results {
+				if r.err != nil {
+					t.Fatalf("request %d: %v", i, r.err)
+				}
+				switch r.status {
+				case http.StatusCreated:
+					created++
+				case http.StatusConflict:
+					conflicted++
+					var envelope struct {
+						Error struct {
+							Code string `json:"code"`
+						} `json:"error"`
+					}
+					if err := json.Unmarshal(r.body, &envelope); err != nil {
+						t.Fatalf("decoding 409 body: %v: %s", err, r.body)
+					}
+					if envelope.Error.Code != "session_conflict" {
+						t.Errorf("409 error.code = %q, want session_conflict: %s", envelope.Error.Code, r.body)
+					}
+					assertSpec(t, spec, http.MethodPost, sessionsPath, bodies[i], r.status, r.header, r.body)
+				default:
+					t.Fatalf("request %d: got status %d, want 201 or 409: %s", i, r.status, r.body)
+				}
+			}
+			if created != 1 || conflicted != 1 {
+				t.Fatalf("got %d x 201 and %d x 409, want exactly one of each (statuses: %d, %d)", created, conflicted, results[0].status, results[1].status)
+			}
+		})
 	}
 }

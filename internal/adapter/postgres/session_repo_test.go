@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Uzama/krane-event-management-platform/internal/adapter/postgres"
 	"github.com/Uzama/krane-event-management-platform/internal/domain"
 	"github.com/Uzama/krane-event-management-platform/internal/domain/opt"
@@ -736,5 +738,118 @@ func TestSessionRepository_Delete_WrongEventReturnsNotFound(t *testing.T) {
 	}
 	if _, err := repo.Get(ctx, ev1.ID, created.ID); err != nil {
 		t.Fatalf("session should still exist under its real event: %v", err)
+	}
+}
+
+// sessionConflictFixture builds an event with two rooms and two speakers,
+// plus a fixed one-hour anchor window, for the sequential EXCLUDE tests
+// below. The anchor is far enough in the future that no other package's
+// fixtures (which use time.Now()) can overlap it by accident.
+type sessionConflictFixture struct {
+	creator, speakerA, speakerB string
+	eventID, roomA, roomB       string
+	starts, ends                time.Time
+}
+
+func newSessionConflictFixture(t *testing.T, pool *pgxpool.Pool) sessionConflictFixture {
+	t.Helper()
+	ctx := context.Background()
+	creator := createTestUser(t, pool)
+	ev := createTestEvent(t, pool, creator)
+	rooms := postgres.NewRoomRepository(pool)
+	rmA, err := rooms.Create(ctx, creator, ev.ID, validRoomInput("Hall A "+uniqueSubject(t)))
+	if err != nil {
+		t.Fatalf("creating room A: %v", err)
+	}
+	rmB, err := rooms.Create(ctx, creator, ev.ID, validRoomInput("Hall B "+uniqueSubject(t)))
+	if err != nil {
+		t.Fatalf("creating room B: %v", err)
+	}
+	starts := time.Date(2030, time.June, 1, 10, 0, 0, 0, time.UTC)
+	return sessionConflictFixture{
+		creator: creator, speakerA: createTestUser(t, pool), speakerB: createTestUser(t, pool),
+		eventID: ev.ID, roomA: rmA.ID, roomB: rmB.ID,
+		starts: starts, ends: starts.Add(time.Hour),
+	}
+}
+
+// TestSessionRepository_Create_OverlappingRoom_ReturnsErrConflict is the
+// sequential (non-race) proof of sessions_room_no_overlap_excl: different
+// speakers, same room, overlapping window -> domain.ErrConflict, and the
+// second row never lands.
+func TestSessionRepository_Create_OverlappingRoom_ReturnsErrConflict(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewSessionRepository(pool)
+	ctx := context.Background()
+	f := newSessionConflictFixture(t, pool)
+
+	if _, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomA, SpeakerID: f.speakerA, Title: "First", StartsAt: f.starts, EndsAt: f.ends,
+	}); err != nil {
+		t.Fatalf("Create (first): %v", err)
+	}
+
+	_, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomA, SpeakerID: f.speakerB, Title: "Overlaps room",
+		StartsAt: f.starts.Add(30 * time.Minute), EndsAt: f.ends.Add(30 * time.Minute),
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("Create (overlapping room): got err %v, want domain.ErrConflict", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM sessions WHERE room_id = $1 AND deleted_at IS NULL`, f.roomA); n != 1 {
+		t.Fatalf("room has %d live sessions after the rejected insert, want 1", n)
+	}
+}
+
+// TestSessionRepository_Create_OverlappingSpeaker_ReturnsErrConflict is the
+// sequential proof of sessions_speaker_no_overlap_excl: different rooms,
+// same speaker, overlapping window -> domain.ErrConflict. Only the speaker
+// constraint can reject this, so it cannot pass on the room constraint's
+// back.
+func TestSessionRepository_Create_OverlappingSpeaker_ReturnsErrConflict(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewSessionRepository(pool)
+	ctx := context.Background()
+	f := newSessionConflictFixture(t, pool)
+
+	if _, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomA, SpeakerID: f.speakerA, Title: "First", StartsAt: f.starts, EndsAt: f.ends,
+	}); err != nil {
+		t.Fatalf("Create (first): %v", err)
+	}
+
+	_, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomB, SpeakerID: f.speakerA, Title: "Overlaps speaker",
+		StartsAt: f.starts.Add(30 * time.Minute), EndsAt: f.ends.Add(30 * time.Minute),
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("Create (overlapping speaker): got err %v, want domain.ErrConflict", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM sessions WHERE speaker_id = $1 AND deleted_at IS NULL`, f.speakerA); n != 1 {
+		t.Fatalf("speaker has %d live sessions after the rejected insert, want 1", n)
+	}
+}
+
+// TestSessionRepository_Create_BackToBackSameRoomAndSpeaker_NoConflict pins
+// the half-open [) time_range: 10:00-11:00 followed by 11:00-12:00 in the
+// SAME room with the SAME speaker shares only the boundary instant, which a
+// half-open range excludes. A closed [] range would make every back-to-back
+// schedule a false conflict; this test is red if time_range were built that
+// way.
+func TestSessionRepository_Create_BackToBackSameRoomAndSpeaker_NoConflict(t *testing.T) {
+	pool := testPool(t)
+	repo := postgres.NewSessionRepository(pool)
+	ctx := context.Background()
+	f := newSessionConflictFixture(t, pool)
+
+	if _, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomA, SpeakerID: f.speakerA, Title: "10-11", StartsAt: f.starts, EndsAt: f.ends,
+	}); err != nil {
+		t.Fatalf("Create (10-11): %v", err)
+	}
+	if _, err := repo.Create(ctx, f.creator, f.eventID, session.CreateInput{
+		RoomID: f.roomA, SpeakerID: f.speakerA, Title: "11-12", StartsAt: f.ends, EndsAt: f.ends.Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("Create (11-12, back-to-back in the same room with the same speaker): got %v, want success -- time_range must be half-open [)", err)
 	}
 }
