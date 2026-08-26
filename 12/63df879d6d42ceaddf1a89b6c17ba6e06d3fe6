@@ -1,0 +1,23 @@
+FEATURES.md
+  s_93bf69d7d4e096::t_62caeb641c1307 54
+internal/adapter/postgres/room_repo_race_test.go
+  s_93bf69d7d4e096::t_53b08d6b46a898 1-100
+AUDIT.md
+  s_93bf69d7d4e096::t_62caeb641c1307 454-455
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "1263df879d6d42ceaddf1a89b6c17ba6e06d3fe6",
+  "prompts": {},
+  "sessions": {
+    "s_93bf69d7d4e096": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c860bd-84bf-4d3a-81e3-13886cc70c90",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
