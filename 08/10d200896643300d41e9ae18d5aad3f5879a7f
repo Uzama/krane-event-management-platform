@@ -1,0 +1,41 @@
+internal/adapter/postgres/session_repo_test.go
+  s_93bf69d7d4e096::t_0932f87421417b 11-12
+  s_93bf69d7d4e096::t_757fe56d30b8f7 743-855
+internal/adapter/postgres/session_repo_race_test.go
+  s_93bf69d7d4e096::t_757fe56d30b8f7 85-153
+FEATURES.md
+  s_93bf69d7d4e096::t_8caa5a55c3095f 54
+internal/adapter/postgres/event_repo_test.go
+  s_93bf69d7d4e096::t_a8aae6ee669013 436-503
+FAILURES.md
+  s_93bf69d7d4e096::t_8caa5a55c3095f 18
+internal/http/sessions_integration_test.go
+  s_93bf69d7d4e096::t_cdb27dfbe19041 7,10-11,749-781,785-881
+  s_93bf69d7d4e096::t_7d479eb997dd25 782-784
+  s_93bf69d7d4e096::t_c1ec9f2eff214e 882
+migrations/schema_test.go
+  s_93bf69d7d4e096::t_9fff1c1365d870 27-32,43-44,166-172
+cmd/agent/scenarios_test.go
+  s_93bf69d7d4e096::t_3603b4051ca697 1-120
+cmd/seed/generate_test.go
+  s_93bf69d7d4e096::t_3603b4051ca697 262-297,307,309-311,315,317,321-322,324-342,345-357,359-360
+  s_93bf69d7d4e096::t_764c6a112c0e61 298-306,308,312-314,316,318-320,323,343-344,358
+AUDIT.md
+  s_93bf69d7d4e096::t_8caa5a55c3095f 445-454
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0810d200896643300d41e9ae18d5aad3f5879a7f",
+  "prompts": {},
+  "sessions": {
+    "s_93bf69d7d4e096": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c860bd-84bf-4d3a-81e3-13886cc70c90",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Uzama Zaid <uzama.jaward@system73.com>"
+    }
+  }
+}
